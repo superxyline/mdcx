@@ -1,4 +1,7 @@
-# syntax=docker/dockerfile:1
+# 注意: 这里刻意不使用 `# syntax=docker/dockerfile:1` 指令.
+# 它会要求 buildkit 先从 docker.io/docker/dockerfile 拉取语法镜像, 而部分 NAS 的
+# 镜像加速服务(如 fnOS 的 docker.fnnas.com)对该镜像返回 401, 导致构建直接失败.
+# 本文件未使用任何需要该指令的新语法特性, 去掉不影响构建.
 
 # ============================================================
 # 阶段 1: 构建前端 (React + rsbuild)
@@ -39,6 +42,10 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple \
     TZ=Asia/Shanghai
+
+# 依赖清单单独先拷入: uv sync 需要 pyproject.toml 才能解析依赖,
+# 而把它们与源码分开拷贝, 可以让改代码时不触发依赖层重建.
+COPY pyproject.toml uv.lock ./
 
 # 依赖层: 只装依赖, 不装项目自身(项目在 /app 下被直接 import).
 # --no-install-project 让这一层完全不依赖源码, 因此改代码不会触发依赖重装.
