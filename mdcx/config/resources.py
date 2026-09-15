@@ -35,29 +35,6 @@ class Resources:
         self.actor_map_backup_path = self.r("mapping_table/mapping_actor.xml")  # 内置演员映射表的文件路径
         self.info_map_backup_path = self.r("mapping_table/mapping_info.xml")  # 内置信息映射表的文件路径
 
-        self.icon_ico = self.qtr("Img/MDCx.ico")  # 任务栏图标
-        self.right_menu = self.qtr("Img/menu.svg")  # 主界面菜单按钮
-        self.play_icon = self.qtr("Img/play.svg")  # 主界面播放按钮
-        self.open_folder_icon = self.qtr("Img/folder.svg")  # 主界面打开文件夹按钮
-        self.open_nfo_icon = self.qtr("Img/nfo.svg")  # 主界面打开nfo按钮
-        self.input_number_icon = self.qtr("Img/number.svg")  # 主界面输入番号按钮
-        self.input_website_icon = self.qtr("Img/website.svg")  # 主界面输入网址按钮
-        self.del_file_icon = self.qtr("Img/delfile.svg")  # 主界面删除文件按钮
-        self.del_folder_icon = self.qtr("Img/delfolder.svg")  # 主界面删除文件夹按钮
-        self.start_icon = self.qtr("Img/start.svg")  # 主界面开始按钮
-        self.stop_icon = self.qtr("Img/stop.svg")  # 主界面开始按钮
-        self.show_logs_icon = self.qtr("Img/show.svg")  # 日志界面显示日志按钮
-        self.hide_logs_icon = self.qtr("Img/hide.svg")  # 日志界面隐藏日志按钮
-        self.hide_boss_icon = self.qtr("Img/hide_boss.svg")  # 隐藏界面按钮
-        self.save_failed_list_icon = self.qtr("Img/save.svg")  # 保存失败列表按钮
-        self.clear_tree_icon = self.qtr("Img/clear.svg")  # 主界面清空结果列表按钮
-        self.home_icon = self.qtr("Img/home.svg")
-        self.log_icon = self.qtr("Img/log.svg")
-        self.tool_icon = self.qtr("Img/tool.svg")
-        self.setting_icon = self.qtr("Img/setting.svg")
-        self.net_icon = self.qtr("Img/net.svg")
-        self.help_icon = self.qtr("Img/help.svg")
-
         self.mark_4k = self.r("Img/4k.png")
         self.mark_8k = self.r("Img/8k.png")
         self.mark_sub = self.r("Img/sub.png")
@@ -83,10 +60,6 @@ class Resources:
 
     def r(self, relative_path: str | Path):
         return self._resources_base / relative_path
-
-    def qtr(self, relative_path: str | Path):
-        # Qt 内部所有路径都使用正斜杠
-        return self.r(relative_path).as_posix()
 
     def u(self, relative_path: str | Path):
         return self._userdata_base / relative_path
@@ -152,15 +125,6 @@ class Resources:
                 info_data["keyword"] = info_ob.get("keyword").strip(",").split(",")
                 info_data["has_name"] = True
         return info_data
-
-    def get_fonts(self):
-        """注册内置字体, 仅 Qt 版使用(浏览器使用系统字体)."""
-        from PyQt5.QtGui import QFontDatabase
-
-        font_db = QFontDatabase()
-        font_folder_path = self.qtr("fonts")
-        for f in os.listdir(font_folder_path):
-            font_db.addApplicationFont(os.path.join(font_folder_path, f))  # 字体路径
 
     def _get_or_generate_local_data(self):
         """如果用户数据目录下已有数据则直接读取, 否则根据内置数据生成"""

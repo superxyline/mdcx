@@ -28,19 +28,10 @@ dependencies = [
 [project.scripts]
 crawl = "mdcx.cmd.crawl:app"
 gen_enums = "mdcx.cmd.gen_enums:main"
-build = "scripts.build:main"
 bump = "scripts.bump:app"
 changelog = "scripts.changelog:app"
 
 [project.optional-dependencies]
-# 桌面版(Qt)所需的图形依赖.
-# 服务端不需要它 —— mdcx/signals.py 在 is_server 模式下不导入 PyQt5,
-# 容器镜像因此可以少装约 250MB 的 Qt 运行库.
-qt = [
-    "pyqt5==5.15.11",
-    "pyqt5-qt5==5.15.2; sys_platform == 'win32'", # 更高版本无 Windows wheel
-    # "pyqt5-pt5==5.15.17; sys_platform != 'win32'",
-]
 web = ["fastapi>=0.116.1", "uvicorn[standard]>=0.35.0"]
 
 [dependency-groups]
@@ -48,8 +39,6 @@ dev = [
     "fastapi-cli>=0.0.8",
     "ipykernel>=6.30.1",
     "pre-commit>=4.2.0",
-    "pyinstaller>=6.14.2",
-    "pyqt5-stubs>=5.15.6.0",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",
     "pytest-cov>=6.2.1",

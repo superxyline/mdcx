@@ -42,8 +42,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 # 依赖层: 只装依赖, 不装项目自身(项目在 /app 下被直接 import).
 # --no-install-project 让这一层完全不依赖源码, 因此改代码不会触发依赖重装.
-# 只启用 web extra 而不带 qt: 服务端不加载 PyQt5(见 mdcx/signals.py),
-# 省下约 250MB 的 Qt 运行库, 也让镜像不必再装 libGL/libxcb 等系统依赖.
+# 只启用 web extra: 项目已移除桌面版, 不再需要任何 Qt 相关依赖,
+# 镜像因此不必安装 libGL/libxcb 等图形库.
 RUN uv sync --frozen --no-install-project --no-dev --extra web
 
 # 应用代码

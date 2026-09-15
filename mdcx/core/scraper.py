@@ -797,7 +797,7 @@ def start_new_scrape(file_mode: FileMode, movie_list: list[Path] | None = None) 
 def _ask_continue_remain() -> Literal["continue", "restart", "cancel"]:
     """询问是否继续刮削剩余任务.
 
-    Qt 版弹模态对话框; 服务端版把问题推给浏览器并阻塞等待回答.
+    服务端模式下把问题推给浏览器并阻塞等待回答; 其它场景(命令行)无法交互, 直接取消.
     """
     if is_server:
         from ..server.ask import AskOption, ask_manager
@@ -813,20 +813,9 @@ def _ask_continue_remain() -> Literal["continue", "restart", "cancel"]:
         # 超时或无人应答时按"取消"处理, 避免替用户决定重头刮削
         return reply if reply in ("continue", "restart") else "cancel"
 
-    from PyQt5.QtWidgets import QMessageBox
-
-    box = QMessageBox(QMessageBox.Information, "继续刮削", "上次刮削未完成，是否继续刮削剩余任务？")
-    box.setStandardButtons(QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
-    box.button(QMessageBox.Yes).setText("继续刮削剩余任务")
-    box.button(QMessageBox.No).setText("从头刮削")
-    box.button(QMessageBox.Cancel).setText("取消")
-    box.setDefaultButton(QMessageBox.No)
-    reply = box.exec()
-    if reply == QMessageBox.Cancel:
-        return "cancel"
-    if reply == QMessageBox.No:
-        return "restart"
-    return "continue"
+    # 命令行等非服务端场景没有可交互的界面, 按"取消"处理, 不擅自替用户决定
+    signal.show_log_text("⚠️ 检测到上次未完成的刮削任务, 当前运行模式无法交互确认, 已跳过.")
+    return "cancel"
 
 
 def _ask_remain_path_mismatch(movie_path: Path, remain_file: Path) -> bool:
@@ -846,14 +835,9 @@ def _ask_remain_path_mismatch(movie_path: Path, remain_file: Path) -> bool:
         )
         return reply != "continue"
 
-    from PyQt5.QtWidgets import QMessageBox
-
-    box = QMessageBox(QMessageBox.Warning, "提醒", message)
-    box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-    box.button(QMessageBox.Yes).setText("继续")
-    box.button(QMessageBox.No).setText("取消")
-    box.setDefaultButton(QMessageBox.No)
-    return box.exec() == QMessageBox.No
+    # 非服务端场景无法确认, 保守地视为取消
+    signal.show_log_text(f"⚠️ 剩余任务文件不在当前待刮削目录中, 已跳过: {remain_file}")
+    return True
 
 
 def get_remain_list() -> bool:
