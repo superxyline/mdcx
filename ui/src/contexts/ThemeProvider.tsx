@@ -1,5 +1,6 @@
-import { createTheme, ThemeProvider as MuiThemeProvider } from "@mui/material/styles";
+import { ThemeProvider as MuiThemeProvider } from "@mui/material/styles";
 import { createContext, type ReactNode, useEffect, useMemo, useState } from "react";
+import { createMd3Theme } from "@/theme/md3";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -43,26 +44,12 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   const theme = useMemo(() => {
     if (typeof window === "undefined") {
-      return createTheme({ palette: { mode: "dark" } });
+      return createMd3Theme("dark");
     }
     const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     const finalMode = mode === "system" ? systemTheme : mode;
 
-    return createTheme({
-      palette: {
-        mode: finalMode,
-        primary: {
-          main: finalMode === "dark" ? "#90caf9" : "#1976d2",
-        },
-        secondary: {
-          main: finalMode === "dark" ? "#f48fb1" : "#dc004e",
-        },
-        background: {
-          default: finalMode === "dark" ? "#020917" : "#fafafa",
-          paper: finalMode === "dark" ? "#1e1e1e" : "#ffffff",
-        },
-      },
-    });
+    return createMd3Theme(finalMode);
   }, [mode]);
 
   return (

@@ -42,17 +42,24 @@ class Config(BaseSettings):
                     f"不允许在开发模式下监听非本地地址 {self.host}:{self.port}"
                     # todo 考虑任何情况下都不允许监听非本地地址, 必须使用 reverse proxy
                 )
-            if not self.api_key_:
-                self.api_key_ = "test"
-            if not self.safe_dirs:
-                self.safe_dirs = "~"
 
-        # 验证必需配置
-        if not self.api_key_:
-            raise ValueError("必须设置环境变量 MDCX_API_KEY")
+        # api_key_ 供代码内显式传入(测试等场景), api_key 来自环境变量 MDCX_API_KEY.
+        # 这里必须用 or 取其一, 不能直接以 api_key_ 覆盖, 否则会丢掉环境变量里的值.
+        self.api_key = self.api_key_ or self.api_key
+
         if not self.safe_dirs:
-            raise ValueError("必须设置环境变量 MDCX_SAFE_DIRS")
-        self.api_key = self.api_key_
+            # 默认只放通用户主目录, 保证开箱即用又不至于让接口能读写整块磁盘
+            self.safe_dirs = "~"
+            print("提示: 未设置 MDCX_SAFE_DIRS, 默认可访问用户主目录; 媒体库位于其它位置时请显式设置.")
+        if not self.api_key:
+            # 未设置 MDCX_API_KEY 时不启用认证, 打开浏览器即可使用.
+            # 一旦设置了该变量, 认证会立即生效(见 dependencies.py).
+            print("提示: 未设置 MDCX_API_KEY, 已关闭接口认证, 仅供本机使用.")
+            if self.host not in ("localhost", "127.0.0.1", "::1"):
+                print(
+                    f"警告: 当前监听 {self.host}:{self.port} 且未启用认证, "
+                    "局域网内任何设备都可以读写服务器上的文件. 对外提供服务前请设置 MDCX_API_KEY."
+                )
         return self
 
     @cached_property

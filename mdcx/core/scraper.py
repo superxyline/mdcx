@@ -2,10 +2,9 @@ import asyncio
 import time
 import traceback
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import aiofiles.os
-from PyQt5.QtWidgets import QMessageBox
 
 from ..base.file import (
     _clean_empty_fodlers,
@@ -30,6 +29,7 @@ from ..models.enums import FileMode
 from ..models.flags import FileDoneDict, Flags
 from ..models.log_buffer import LogBuffer
 from ..models.types import CrawlersResult, FileInfo, OtherInfo, ScrapeResult, ShowData
+from ..server.var import is_server
 from ..signals import signal
 from ..tools.emby_actor_image import update_emby_actor_photo
 from ..tools.emby_actor_info import creat_kodi_actors
@@ -794,6 +794,68 @@ def start_new_scrape(file_mode: FileMode, movie_list: list[Path] | None = None) 
         signal.show_log_text(traceback.format_exc())
 
 
+def _ask_continue_remain() -> Literal["continue", "restart", "cancel"]:
+    """询问是否继续刮削剩余任务.
+
+    Qt 版弹模态对话框; 服务端版把问题推给浏览器并阻塞等待回答.
+    """
+    if is_server:
+        from ..server.ask import AskOption, ask_manager
+
+        reply = ask_manager.ask(
+            "上次刮削未完成，是否继续刮削剩余任务？",
+            [
+                AskOption("continue", "继续刮削剩余任务", "primary"),
+                AskOption("restart", "从头刮削"),
+                AskOption("cancel", "取消", "danger"),
+            ],
+        )
+        # 超时或无人应答时按"取消"处理, 避免替用户决定重头刮削
+        return reply if reply in ("continue", "restart") else "cancel"
+
+    from PyQt5.QtWidgets import QMessageBox
+
+    box = QMessageBox(QMessageBox.Information, "继续刮削", "上次刮削未完成，是否继续刮削剩余任务？")
+    box.setStandardButtons(QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+    box.button(QMessageBox.Yes).setText("继续刮削剩余任务")
+    box.button(QMessageBox.No).setText("从头刮削")
+    box.button(QMessageBox.Cancel).setText("取消")
+    box.setDefaultButton(QMessageBox.No)
+    reply = box.exec()
+    if reply == QMessageBox.Cancel:
+        return "cancel"
+    if reply == QMessageBox.No:
+        return "restart"
+    return "continue"
+
+
+def _ask_remain_path_mismatch(movie_path: Path, remain_file: Path) -> bool:
+    """剩余任务文件不在当前待刮削目录时确认. 返回 True 表示用户选择取消."""
+    message = (
+        f"很重要！！请注意：\n当前待刮削目录：{movie_path}\n剩余任务文件路径：{remain_file.resolve()}\n"
+        "文件不在当前待刮削目录中, 可能是使用其他配置扫描的！\n"
+        "请确认成功输出目录和失败目录是否正确！如果配置不正确，继续刮削可能会导致文件被移动到新配置的输出位置！\n是否继续刮削？"
+    )
+    if is_server:
+        from ..server.ask import AskOption, ask_manager
+
+        reply = ask_manager.ask(
+            "剩余任务文件不在当前待刮削目录中",
+            [AskOption("continue", "继续", "primary"), AskOption("cancel", "取消", "danger")],
+            detail=message,
+        )
+        return reply != "continue"
+
+    from PyQt5.QtWidgets import QMessageBox
+
+    box = QMessageBox(QMessageBox.Warning, "提醒", message)
+    box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+    box.button(QMessageBox.Yes).setText("继续")
+    box.button(QMessageBox.No).setText("取消")
+    box.setDefaultButton(QMessageBox.No)
+    return box.exec() == QMessageBox.No
+
+
 def get_remain_list() -> bool:
     """This function is intended to be sync."""
     remain_list_path = resources.u("remain.txt")
@@ -804,16 +866,10 @@ def get_remain_list() -> bool:
     Flags.remain_list = remains
     if not len(Flags.remain_list) or Switch.REMAIN_TASK not in manager.config.switch_on:
         return False
-    box = QMessageBox(QMessageBox.Information, "继续刮削", "上次刮削未完成，是否继续刮削剩余任务？")
-    box.setStandardButtons(QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
-    box.button(QMessageBox.Yes).setText("继续刮削剩余任务")
-    box.button(QMessageBox.No).setText("从头刮削")
-    box.button(QMessageBox.Cancel).setText("取消")
-    box.setDefaultButton(QMessageBox.No)
-    reply = box.exec()
-    if reply == QMessageBox.Cancel:
+    reply = _ask_continue_remain()
+    if reply == "cancel":
         return True  # 不刮削
-    if reply == QMessageBox.No:
+    if reply == "restart":
         return False  # 从头刮削
 
     movie_path = manager.config.media_path
@@ -823,19 +879,7 @@ def get_remain_list() -> bool:
 
     p = Flags.remain_list[0]
     if not is_descendant(p, movie_path):
-        box = QMessageBox(
-            QMessageBox.Warning,
-            "提醒",
-            f"很重要！！请注意：\n当前待刮削目录：{movie_path}\n剩余任务文件路径：{p.resolve()}\n"
-            "文件不在当前待刮削目录中, 可能是使用其他配置扫描的！\n"
-            "请确认成功输出目录和失败目录是否正确！如果配置不正确，继续刮削可能会导致文件被移动到新配置的输出位置！\n是否继续刮削？",
-        )
-        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        box.button(QMessageBox.Yes).setText("继续")
-        box.button(QMessageBox.No).setText("取消")
-        box.setDefaultButton(QMessageBox.No)
-        reply = box.exec()
-        if reply == QMessageBox.No:
+        if _ask_remain_path_mismatch(movie_path, p):
             return True
     signal.show_log_text(f"🍯 🍯 🍯 NOTE: 继续刮削未完成任务！！！ 剩余未刮削文件数量（{len(Flags.remain_list)})")
     start_new_scrape(FileMode.Default, Flags.remain_list)

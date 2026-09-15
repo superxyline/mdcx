@@ -656,3 +656,50 @@ async def move_trailer_video(old_dir: Path, new_dir: Path, file_name: str, namin
         if await aiofiles.os.path.exists(trailer_old_path) and not await aiofiles.os.path.exists(trailer_new_path):
             await move_file_async(trailer_old_path, trailer_new_path)
             LogBuffer.log().write("\n 🍀 Trailer done!")
+
+
+async def move_videos_to_moved_folder() -> None:
+    """把待刮削目录下的视频与字幕移动到底下的 Movie_moved 子目录.
+
+    对应桌面版的"工具-视频移动". 用途是把已经手工处理过、不希望再被刮削扫描到的
+    文件从媒体目录里挪开, 同时保持目录结构不变.
+    """
+    signal.change_buttons_status.emit()
+    start_time = time.time()
+    c = get_movie_path_setting()
+    movie_path = c.movie_path
+    ignore_dirs = list(c.ignore_dirs)
+    ignore_dirs.append(movie_path / "Movie_moved")
+
+    try:
+        movie_list = await movie_lists(ignore_dirs, manager.config.media_type + manager.config.sub_type, movie_path)
+        if not movie_list:
+            signal.show_log_text("No movie found!")
+            return
+
+        des_path = movie_path / "Movie_moved"
+        if not des_path.exists():
+            os.makedirs(des_path)
+            signal.show_log_text("Created folder: Movie_moved")
+
+        signal.show_log_text("Start move movies...")
+        skip_list: list[tuple[str, Path, str]] = []
+        for file_path in movie_list:
+            file_name = file_path.name
+            file_ext = file_path.suffix.lower()
+            try:
+                # shutil.move 是阻塞调用, 放到线程里避免卡住事件循环
+                await asyncio.to_thread(shutil.move, str(file_path), str(des_path))
+                label = "movie" if file_ext in manager.config.media_type else "sub"
+                signal.show_log_text(f"   Move {label}: {file_name} to Movie_moved Success!")
+            except Exception as e:
+                skip_list.append((file_name, file_path, str(e)))
+
+        if skip_list:
+            signal.show_log_text(f"\n{len(skip_list)} file(s) did not move!")
+            for i, (name, path, err) in enumerate(skip_list, start=1):
+                signal.show_log_text(f"[{i}] {name}\n file path: {path}\n {err}\n")
+        signal.show_log_text(f"Move movies finished! 用时 {get_used_time(start_time)}s")
+    finally:
+        signal.reset_buttons_status.emit()
+        signal.show_log_text("=" * 80)

@@ -4,13 +4,15 @@ from pathlib import Path
 
 import aiofiles.os
 from PIL import Image, ImageFilter
-from PyQt5.QtGui import QImageReader, QPixmap
 
 from .signals import signal
 from .utils.file import delete_file_async
 
 
 async def get_pixmap(pic_path: Path, poster=True, pic_from=""):
+    """将图片加载为 QPixmap, 仅 Qt 版使用(服务端版不经由此函数显示图片)."""
+    from PyQt5.QtGui import QImageReader, QPixmap
+
     try:
         # 使用 QImageReader 加载，适合加载大文件，pixmap适合显示
         # 判断是否可读取

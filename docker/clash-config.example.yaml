@@ -1,0 +1,78 @@
+# ============================================================
+# mihomo (Clash.Meta) 配置模板
+#
+# 用法: 复制为 ./clash/config.yaml 后按注释填写, 然后 docker compose up -d
+#
+# 注意: 本文件只提供"如何让 mdcx 与面板连上内核"的骨架,
+#       节点/订阅需你自己填写, 这里不含任何节点信息.
+# ============================================================
+
+# ---------- 代理端口 ----------
+# 混合端口(HTTP + SOCKS5 共用). mdcx 里代理地址就填 http://clash:7890
+mixed-port: 7890
+
+# 必须为 true 并绑定 0.0.0.0, 否则只有容器内部能连,
+# mdcx 容器和宿主机都访问不到这个代理端口
+allow-lan: true
+bind-address: "*"
+
+mode: rule
+log-level: info
+ipv6: false
+
+# ---------- 外部控制(面板) ----------
+# 面板与 API 的监听端口. 默认的 127.0.0.1:9090 只监听容器内部,
+# 想在浏览器里打开面板必须改成 0.0.0.0:9090
+external-controller: 0.0.0.0:9090
+
+# 面板访问密码. 强烈建议设置: 不设密码时, 同一网络内任何设备
+# 都能打开面板修改你的代理规则. mdcx 连的是 7890 而不是 9090,
+# 所以这个密码不影响 mdcx, 只用于你登录面板
+secret: "在这里设置一个密码"
+
+# ---------- 面板本体 ----------
+# mihomo 会把面板托管在 /ui 路径下, 启动时自动下载(需要能访问 GitHub).
+# 下载完成后浏览器访问: http://NAS的IP:9090/ui
+external-ui: ui
+external-ui-url: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip"
+
+# 如果内核下载面板失败(国内访问 GitHub 不稳), 手动放一份即可:
+#   1. 下载 https://github.com/MetaCubeX/metacubexd/releases 里的压缩包
+#   2. 解压后把所有文件放进 ./clash/ui/ 目录
+#   3. 重启容器, 那些文件会被直接使用, 不再尝试下载
+
+# ---------- 节点配置(二选一) ----------
+# 方式一: 订阅(推荐). 内核会按 interval 自动更新节点, 不用手动维护
+proxy-providers:
+  my-sub:
+    type: http
+    url: "在这里填你的订阅地址"
+    interval: 3600
+    path: ./providers/my-sub.yaml
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 300
+
+proxy-groups:
+  - name: 节点选择
+    type: select
+    use:
+      - my-sub
+
+# 方式二: 直接列节点(不用订阅时, 注释掉上面的 proxy-providers,
+#        然后把 proxies 填好, 并把上面的 use: 换成 proxies: [节点名])
+# proxies:
+#   - name: "节点1"
+#     type: ss
+#     server: example.com
+#     port: 443
+#     cipher: aes-256-gcm
+#     password: "password"
+
+# ---------- 分流规则 ----------
+rules:
+  # 国内直连, 其余走代理. 刮削站点若被误判为直连,
+  # 可在面板里临时切到全局模式验证, 或在此处加规则
+  - GEOIP,CN,DIRECT
+  - MATCH,节点选择

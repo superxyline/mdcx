@@ -107,6 +107,16 @@ class AsyncBackgroundExecutor:
         # 提交取消任务到事件循环
         return self.submit(_cancel_all())
 
+    @property
+    def busy(self) -> bool:
+        """是否有任务尚未完成. 用于向前端报告后台刮削是否仍在进行.
+
+        任务运行在独立的后台线程事件循环中, 与 HTTP 请求和 WebSocket 连接无关,
+        因此浏览器关闭后此属性仍为 True, 直到刮削真正结束.
+        """
+        with self._lock:
+            return any(not future.done() for future in self._pending_futures)
+
     def _run_event_loop(self):
         """运行事件循环的线程函数"""
         try:

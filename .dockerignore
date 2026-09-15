@@ -1,0 +1,32 @@
+# 版本控制与本地环境
+.git
+.gitignore
+.github
+
+# 本地虚拟环境与依赖(node_modules 由构建阶段内部自行安装)
+.venv
+uv.lock.bak
+
+# 前端产物, 在镜像构建的第一阶段生成
+ui/dist
+ui/node_modules
+
+# Python 缓存
+__pycache__
+*.py[cod]
+*.egg-info
+
+# 运行期数据, 绝不应打进镜像
+data
+clash
+media
+config.json
+MDCx.config
+userdata
+logs
+*.log
+
+# 开发机配置
+.vscode
+.idea
+tests

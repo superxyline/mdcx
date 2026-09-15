@@ -22,9 +22,6 @@ dependencies = [
     "pillow==11.3.0",
     "ping3==4.0.4",
     "pydantic-settings>=2.10.1",
-    "pyqt5==5.15.11",
-    "pyqt5-qt5==5.15.2; sys_platform == 'win32'", # 更高版本无 Windows wheel
-    # "pyqt5-pt5==5.15.17; sys_platform != 'win32'",
     "zhconv==1.4.3",
 ]
 
@@ -36,6 +33,14 @@ bump = "scripts.bump:app"
 changelog = "scripts.changelog:app"
 
 [project.optional-dependencies]
+# 桌面版(Qt)所需的图形依赖.
+# 服务端不需要它 —— mdcx/signals.py 在 is_server 模式下不导入 PyQt5,
+# 容器镜像因此可以少装约 250MB 的 Qt 运行库.
+qt = [
+    "pyqt5==5.15.11",
+    "pyqt5-qt5==5.15.2; sys_platform == 'win32'", # 更高版本无 Windows wheel
+    # "pyqt5-pt5==5.15.17; sys_platform != 'win32'",
+]
 web = ["fastapi>=0.116.1", "uvicorn[standard]>=0.35.0"]
 
 [dependency-groups]

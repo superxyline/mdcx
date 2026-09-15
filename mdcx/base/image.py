@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 import time
 import traceback
@@ -254,4 +255,87 @@ async def add_del_extrafanart_copy(mode: str) -> None:
                 new_count += 1
 
     signal.show_log_text(f"\nDone! \n Total: {total_count}  {mode} copy: {new_count} ")
-    signal.show_log_text("================================================================================")
+    signal.show_log_text("=" * 80)
+
+
+def get_poster_paths(img_path: Path) -> tuple[Path, Path, Path]:
+    """由封面图片路径推导出 poster / thumb / fanart 的输出路径.
+
+    对应桌面版裁剪窗口里的推导规则: 配置项"简化图片名"开启时统一用 poster.jpg,
+    否则保留番号前缀. thumb 与 fanart 与 poster 同名不同前缀.
+    """
+    img_name, img_ex = img_path.stem, img_path.suffix
+    poster_path = img_path.with_name("poster.jpg")
+    if not manager.config.pic_simple_name and "-" in img_name:
+        poster_path = img_path.with_name(
+            img_path.name.replace("-fanart", "").replace("-thumb", "").replace("-poster", "").replace(img_ex, "")
+            + "-poster.jpg"
+        )
+    poster_name = poster_path.name
+    thumb_path = img_path.with_name(poster_name.replace("poster.", "thumb."))
+    fanart_path = img_path.with_name(poster_name.replace("poster.", "fanart."))
+    return poster_path, thumb_path, fanart_path
+
+
+async def cut_poster(
+    img_path: Path,
+    box: tuple[int, int, int, int],
+    mark_list: list[str] | None = None,
+) -> dict[str, str]:
+    """按给定矩形裁剪封面, 并同步更新 poster / thumb / fanart.
+
+    ``box`` 是原图坐标系下的 (左上x, 左上y, 右下x, 右下y), 与桌面版裁剪窗口计算的
+    裁剪范围含义一致 —— 前端只需把显示坐标换算成原图坐标后传进来即可.
+
+    thumb 与 fanart 保存的是**未裁剪的原图**, 与桌面版行为一致: 只有 poster 会被裁.
+    """
+    if mark_list is None:
+        mark_list = []
+
+    if not await aiofiles.os.path.exists(img_path):
+        raise FileNotFoundError(f"图片不存在: {img_path}")
+
+    x1, y1, x2, y2 = box
+    if x2 <= x1 or y2 <= y1:
+        raise ValueError("裁剪范围无效: 右下角坐标必须大于左上角.")
+
+    poster_path, thumb_path, fanart_path = get_poster_paths(img_path)
+    result = {"poster": str(poster_path), "thumb": "", "fanart": ""}
+
+    need_thumb = DownloadableFile.THUMB in manager.config.download_files and thumb_path != img_path
+    need_fanart = DownloadableFile.FANART in manager.config.download_files and fanart_path != img_path
+
+    def _do_cut() -> None:
+        # poster 常与原图是同一个文件, 所以必须先把原图读进内存再写盘:
+        # 若先裁剪覆盖 poster, 之后重新读盘拿到的就已经是裁剪后的图了,
+        # 会导致 thumb / fanart 被错误地裁掉 (桌面版靠内存里的 img 副本规避了这点).
+        with Image.open(img_path) as raw:
+            original = raw.convert("RGB")
+            cropped = original.crop(box)
+            cropped.save(poster_path, quality=95, subsampling=0)
+            cropped.close()
+            if need_thumb:
+                original.save(thumb_path, quality=95, subsampling=0)
+            if need_fanart:
+                original.save(fanart_path, quality=95, subsampling=0)
+            original.close()
+
+    await asyncio.to_thread(_do_cut)
+
+    if manager.config.poster_mark == 1:
+        await add_mark_thread(poster_path, mark_list)
+
+    if need_thumb:
+        if manager.config.thumb_mark == 1:
+            await add_mark_thread(thumb_path, mark_list)
+        result["thumb"] = str(thumb_path)
+    else:
+        result["thumb"] = str(img_path)
+
+    if need_fanart:
+        if manager.config.fanart_mark == 1:
+            await add_mark_thread(fanart_path, mark_list)
+        result["fanart"] = str(fanart_path)
+
+    signal.show_log_text(f"✅ 封面裁剪完成: {poster_path.name}")
+    return result

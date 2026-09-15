@@ -16,6 +16,9 @@ class APIKeyHeader(APIKeyBase):
         self.scheme_name = scheme_name or self.__class__.__name__
 
     async def __call__(self, request: HTTPConnection) -> str | None:
+        if not API_KEY:
+            # 未配置 MDCX_API_KEY, 表示未启用认证(默认的本机使用场景)
+            return None
         api_key = request.headers.get(self.model.name)
         if api_key == API_KEY:
             return api_key

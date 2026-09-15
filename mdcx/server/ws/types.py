@@ -28,6 +28,7 @@ class MessageType(Enum):
     PROGRESS = "progress"
     STATUS = "status"
     CUSTOM = "custom"
+    ASK = "ask"  # 服务端向浏览器提问, 等待用户在对话框中作答
     QT_SINGAL = "qt_signal"  # 兼容桌面应用
 
 

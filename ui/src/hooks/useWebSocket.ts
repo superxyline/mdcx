@@ -10,6 +10,7 @@ export type MessageType =
   | "error"
   | "progress"
   | "status"
+  | "ask"
   | "qt_signal"
   | "custom";
 
@@ -53,16 +54,15 @@ class WebSocketManager {
     this.isConnecting = true;
     console.log("WebSocketManager: Attempting to connect...");
 
+    // 浏览器无法给 WebSocket 设置自定义 Header, 只能借 sec-websocket-protocol 传 Key.
+    // 服务端未启用认证时本地没有 Key, 此时直接连接即可, 不应把用户推去认证页.
+    const protocols = ["v1.mdcx"];
     const apiKey = localStorage.getItem("apiKey");
-    if (!apiKey) {
-      console.warn("WebSocketManager: No API key found. Redirecting to auth.");
-      this.isConnecting = false;
-      navigate({ to: "/auth" });
-      return;
+    if (apiKey) {
+      const b64Key = btoa(apiKey).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      protocols.push(`base64.ws.key.${b64Key}`);
     }
-
-    const b64Key = btoa(apiKey).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    this.ws = new WebSocket(this.url, ["v1.mdcx", `base64.ws.key.${b64Key}`]);
+    this.ws = new WebSocket(this.url, protocols);
 
     this.ws.onopen = this.handleOpen.bind(this);
     this.ws.onmessage = this.handleMessage.bind(this);

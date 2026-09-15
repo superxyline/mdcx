@@ -1,0 +1,44 @@
+services:
+  mdcx:
+    build: .
+    image: mdcx:local
+    container_name: mdcx
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # 监听地址: 容器内必须是 0.0.0.0, 否则端口映射进不来
+      MDCX_HOST: "0.0.0.0"
+      MDCX_PORT: "8000"
+      # 允许被访问的目录白名单(容器内路径), 与下面 volumes 的挂载点保持一致.
+      # 媒体库有多处就逗号分隔, 例如 "/media,/downloads"
+      MDCX_SAFE_DIRS: "/media"
+      # 认证开关: 留空表示不校验(适合只在内网/本机访问).
+      # 一旦填写, 接口会立即要求 X-API-KEY, 浏览器会弹出认证页.
+      MDCX_API_KEY: ""
+      TZ: "Asia/Shanghai"
+    volumes:
+      # 配置、番号数据库、日志、剩余任务等全部状态
+      - ./data:/data
+      # 媒体库: 把左半边改成你 NAS 上的真实路径, 右半边保持 /media
+      # 群晖示例:  - /volume1/video:/media
+      # 威联通示例: - /share/video:/media
+      - ./media:/media
+    depends_on:
+      - clash
+
+  # Clash 内核(Clash.Meta / mihomo). 如果刮削源不需要代理,
+  # 或者你已经在路由器/别的设备上跑着代理, 把整个 clash 服务删掉即可,
+  # 此时记得去掉上面 mdcx 的 depends_on.
+  clash:
+    image: metacubex/mihomo:latest
+    container_name: mdcx-clash
+    restart: unless-stopped
+    ports:
+      # 面板与 API 端口. 浏览器访问 http://NAS的IP:9090/ui 即可管理节点.
+      # 注意: 配置需把 external-controller 设为 0.0.0.0:9090, 默认的 127.0.0.1
+      # 只监听容器内部, 映射出来也连不上. 详见 docker/README.md
+      - "9090:9090"
+    volumes:
+      # 把你的 Clash 配置放到 ./clash/config.yaml
+      - ./clash:/root/.config/mihomo

@@ -6,7 +6,6 @@ from pathlib import Path
 
 import zhconv
 from lxml import etree
-from PyQt5.QtGui import QFontDatabase
 
 from ..consts import IS_PYINSTALLER, MAIN_PATH
 from ..manual import ManualConfig
@@ -155,6 +154,9 @@ class Resources:
         return info_data
 
     def get_fonts(self):
+        """注册内置字体, 仅 Qt 版使用(浏览器使用系统字体)."""
+        from PyQt5.QtGui import QFontDatabase
+
         font_db = QFontDatabase()
         font_folder_path = self.qtr("fonts")
         for f in os.listdir(font_folder_path):
