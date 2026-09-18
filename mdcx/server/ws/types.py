@@ -66,7 +66,9 @@ class WebSocketMessage[T: JsonSerializable]:
 
     def to_json(self) -> str:
         """转换为 JSON 字符串"""
-        return json.dumps(self.to_dict(), ensure_ascii=False)
+        # 刮削日志里会夹带 Path 等非 JSON 类型, 没有 default 时 json.dumps 直接抛错,
+        # 整条消息推送失败的表现为界面日志时断时续
+        return json.dumps(self.to_dict(), ensure_ascii=False, default=str)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WebSocketMessage":

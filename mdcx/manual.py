@@ -348,7 +348,7 @@ class ManualConfig:
         "zb": "ZoliBoy",
     }
     OFFICIAL = {
-        "https://s1s1s1.com": "sivr|ssis|ssni|snis|soe|oned|one|onsd|ofje|sps|tksoe",  # https://s1s1s1.com/search/list?keyword=soe
+        "https://s1s1s1.com": "sivr|ssis|ssni|snis|soe|oned|one|onsd|ofje|sps|tksoe|sone|snos",  # 补 S1 2024 起启用的新番号前缀
         "https://moodyz.com": "mdvr|midv|mide|midd|mibd|mimk|miid|migd|mifd|miae|miad|miaa|mdl|mdj|mdi|mdg|mdf|mde|mdld|mded|mizd|mird|mdjd|rmid|mdid|mdmd|mimu|mdpd|mivd|mdud|mdgd|mdvd|mias|miqd|mint|rmpd|mdrd|tkmide|tkmidd|kmide|tkmigd|mdfd|rmwd|miab",
         "https://www.madonna-av.com": "juvr|jusd|juq|juy|jux|jul|juk|juc|jukd|jusd|oba|jufd|roeb|roe|ure|mdon|jfb|obe|jums",
         "https://www.wanz-factory.com": "wavr|waaa|bmw|wanz",

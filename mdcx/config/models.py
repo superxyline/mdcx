@@ -95,7 +95,8 @@ class FieldConfig(BaseModel):
 class Config(BaseModel):
     model_config = ConfigDict()
     # region: General Settings
-    media_path: str = ServerPathDirectory("./media", title="媒体路径", initial_path=SAFE_DIRS[0].as_posix())
+    # 默认指向容器内媒体库挂载点, 与 docker-compose.yml 的挂载保持一致
+    media_path: str = ServerPathDirectory("/media", title="媒体路径", initial_path=SAFE_DIRS[0].as_posix())
     softlink_path: str = ServerPathDirectory("softlink", title="软链接路径", ref_field="media_path")
     success_output_folder: str = ServerPathDirectory("JAV_output", title="成功输出目录", ref_field="media_path")
     failed_output_folder: str = ServerPathDirectory("failed", title="失败输出目录", ref_field="media_path")
@@ -227,21 +228,15 @@ class Config(BaseModel):
     del_empty_folder: bool = Field(default=True, title="删除空目录")
     show_poster: bool = Field(default=True, title="显示海报")
     download_files: list[DownloadableFile] = Field(
+        # 默认不含 预告片/主题片/原始剧照/剧照附加: 它们会被媒体库识别成额外条目
+        # 默认不含 IGNORE_YOUMA/WUMA/FC2/GUOCHAN: 它们会让对应类型的封面跳过裁剪, 直接复制横版原图
         default_factory=lambda: [
             DownloadableFile.POSTER,
             DownloadableFile.THUMB,
             DownloadableFile.FANART,
-            DownloadableFile.EXTRAFANART,
-            DownloadableFile.TRAILER,
             DownloadableFile.NFO,
-            DownloadableFile.EXTRAFANART_EXTRAS,
             DownloadableFile.EXTRAFANART_COPY,
-            DownloadableFile.THEME_VIDEOS,
             DownloadableFile.IGNORE_PIC_FAIL,
-            DownloadableFile.IGNORE_YOUMA,
-            DownloadableFile.IGNORE_WUMA,
-            DownloadableFile.IGNORE_FC2,
-            DownloadableFile.IGNORE_GUOCHAN,
             DownloadableFile.IGNORE_SIZE,
         ],
         title="下载文件类型",
@@ -252,10 +247,8 @@ class Config(BaseModel):
             KeepableFile.THUMB,
             KeepableFile.FANART,
             KeepableFile.EXTRAFANART,
-            KeepableFile.TRAILER,
             KeepableFile.NFO,
             KeepableFile.EXTRAFANART_COPY,
-            KeepableFile.THEME_VIDEOS,
         ],
         title="保留文件类型",
     )
@@ -367,62 +360,69 @@ class Config(BaseModel):
     # endregion
 
     field_configs: dict[CrawlerResultFields, FieldConfig] = Field(
+        # 站点顺序按实测可用性排列: OFFICIAL 最权威; JAVBUS/JAV321 稳定且提供封面与剧照;
+        # JAVDB 需要 Cookie; DMM 需要无头浏览器。原默认以 THEPORNDB 打头, 但它需 API token
+        # 且是欧美站, 对日本作品无数据, 每次都要白等一次超时才落到下一个站点。
         default_factory=lambda: {
             CrawlerResultFields.TITLE: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
-                language=Language.JP,
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
+                language=Language.ZH_CN,
             ),
             CrawlerResultFields.ORIGINALTITLE: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
+                language=Language.ZH_CN,
             ),
             CrawlerResultFields.OUTLINE: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
-                language=Language.JP,
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
+                language=Language.ZH_CN,
             ),
             CrawlerResultFields.ORIGINALPLOT: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
+                language=Language.ZH_CN,
             ),
             CrawlerResultFields.ACTORS: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
                 language=Language.JP,
             ),
             CrawlerResultFields.ALL_ACTORS: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.JAVDB],
+                site_prority=[Website.JAVBUS, Website.JAVDB, Website.JAV321],
                 language=Language.JP,
             ),
             CrawlerResultFields.TAGS: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
                 language=Language.ZH_CN,
             ),
             CrawlerResultFields.DIRECTORS: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
                 language=Language.JP,
             ),
             CrawlerResultFields.SERIES: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
                 language=Language.JP,
             ),
             CrawlerResultFields.STUDIO: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
                 language=Language.JP,
             ),
             CrawlerResultFields.PUBLISHER: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB],
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM],
                 language=Language.JP,
             ),
-            CrawlerResultFields.THUMB: FieldConfig(site_prority=[Website.THEPORNDB, Website.DMM]),
-            CrawlerResultFields.POSTER: FieldConfig(site_prority=[Website.THEPORNDB, Website.DMM]),
-            CrawlerResultFields.EXTRAFANART: FieldConfig(site_prority=[Website.THEPORNDB, Website.DMM]),
+            CrawlerResultFields.THUMB: FieldConfig(site_prority=[Website.JAVBUS, Website.DMM, Website.THEPORNDB]),
+            CrawlerResultFields.POSTER: FieldConfig(site_prority=[Website.JAVBUS, Website.DMM, Website.THEPORNDB]),
+            CrawlerResultFields.EXTRAFANART: FieldConfig(
+                site_prority=[Website.JAVBUS, Website.DMM, Website.THEPORNDB]
+            ),
             CrawlerResultFields.TRAILER: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB]
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM]
             ),
             CrawlerResultFields.RELEASE: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB]
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM]
             ),
             CrawlerResultFields.RUNTIME: FieldConfig(
-                site_prority=[Website.THEPORNDB, Website.OFFICIAL, Website.DMM, Website.JAVDB]
+                site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM]
             ),
-            CrawlerResultFields.SCORE: FieldConfig(site_prority=[Website.THEPORNDB, Website.DMM, Website.JAVDB]),
+            CrawlerResultFields.SCORE: FieldConfig(site_prority=[Website.JAVBUS, Website.JAVDB, Website.DMM]),
             CrawlerResultFields.WANTED: FieldConfig(site_prority=[Website.DMM, Website.JAVDB]),
         },
         title="字段配置",
@@ -505,7 +505,8 @@ class Config(BaseModel):
         title="字段规则",
     )
     suffix_sort: list[SuffixSort] = Field(
-        default_factory=lambda: [SuffixSort.MOWORD, SuffixSort.CNWORD, SuffixSort.DEFINITION],
+        # 默认不追加任何后缀, 文件名保持纯番号
+        default_factory=list,
         title="后缀排序",
     )
     actor_no_name: str = Field(default="未知演员", title="未知演员名称")
@@ -520,9 +521,9 @@ class Config(BaseModel):
     youma_style: str = Field(default="", title="有码样式")
     cd_name: int = Field(default=0, title="CD名称")
     cd_char: list[CDChar] = Field(
+        # 不含 ENDC: 字母 c 通常是中文字幕标记(见 cnword_char), 不应被当成"第3集"
         default_factory=lambda: [
             CDChar.LETTER,
-            CDChar.ENDC,
             CDChar.DIGITAL,
             CDChar.MIDDLE_NUMBER,
             CDChar.UNDERLINE,
