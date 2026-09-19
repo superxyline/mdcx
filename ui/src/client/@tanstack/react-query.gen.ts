@@ -155,7 +155,7 @@ export const createConfigQueryKey = (options: Options<CreateConfigData>) => crea
 
 /**
  * 创建配置文件
- * 创建指定名称的配置文件
+ * 创建指定名称的配置文件, 内容为默认配置
  */
 export const createConfigOptions = (options: Options<CreateConfigData>) => {
     return queryOptions({
@@ -174,7 +174,7 @@ export const createConfigOptions = (options: Options<CreateConfigData>) => {
 
 /**
  * 创建配置文件
- * 创建指定名称的配置文件
+ * 创建指定名称的配置文件, 内容为默认配置
  */
 export const createConfigMutation = (options?: Partial<Options<CreateConfigData>>): UseMutationOptions<unknown, AxiosError<CreateConfigError>, Options<CreateConfigData>> => {
     const mutationOptions: UseMutationOptions<unknown, AxiosError<CreateConfigError>, Options<CreateConfigData>> = {

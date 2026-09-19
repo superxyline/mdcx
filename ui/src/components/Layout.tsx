@@ -97,12 +97,12 @@ export default function Layout({ children }: { children: ReactNode }) {
   };
 
   const menuItems = createMenuItems([
-    { text: "Home", to: "/", icon: <Home /> },
-    { text: "Tool", to: "/tool", icon: <Build /> },
-    { text: "Network", to: "/network", icon: <Lan /> },
-    { text: "Logs", to: "/logs", icon: <Article /> },
-    { text: "Settings", to: "/settings", icon: <Settings /> },
-    { text: "About", to: "/about", icon: <Info /> },
+    { text: "首页", to: "/", icon: <Home /> },
+    { text: "工具箱", to: "/tool", icon: <Build /> },
+    { text: "网络", to: "/network", icon: <Lan /> },
+    { text: "日志", to: "/logs", icon: <Article /> },
+    { text: "设置", to: "/settings", icon: <Settings /> },
+    { text: "关于", to: "/about", icon: <Info /> },
   ]);
 
   return (
@@ -120,7 +120,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <Menu />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Dashboard
+            MDCx 影片元数据刮削
           </Typography>
           <IconButton color="inherit" onClick={handleThemeChange}>
             {mode === "light" ? <Brightness7 /> : mode === "dark" ? <Brightness4 /> : <BrightnessAuto />}

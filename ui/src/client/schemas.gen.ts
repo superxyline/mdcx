@@ -47,6 +47,7 @@ export const Config_InputSchema = {
         media_path: {
             type: 'string',
             title: '媒体路径',
+            description: '影片所在的目录, 刮削程序会从这里扫描视频文件',
             default: '/media',
             uiSchema: {
                 customProps: {
@@ -74,6 +75,7 @@ export const Config_InputSchema = {
         success_output_folder: {
             type: 'string',
             title: '成功输出目录',
+            description: '刮削成功的影片整理后存放的目录',
             default: 'JAV_output',
             uiSchema: {
                 customProps: {
@@ -88,6 +90,7 @@ export const Config_InputSchema = {
         failed_output_folder: {
             type: 'string',
             title: '失败输出目录',
+            description: '刮削失败(识别不出番号等)的文件移到这里等待人工处理',
             default: 'failed',
             uiSchema: {
                 customProps: {
@@ -117,7 +120,8 @@ export const Config_InputSchema = {
                 type: 'string'
             },
             type: 'array',
-            title: '媒体类型'
+            title: '媒体类型',
+            description: '只刮削这些扩展名的视频文件, 其他文件会被忽略'
         },
         sub_type: {
             items: {
@@ -134,6 +138,7 @@ export const Config_InputSchema = {
         auto_link: {
             type: 'boolean',
             title: '自动创建软链接',
+            description: '刮削完成后在软链接路径生成指向影片的软链接, 适合给媒体服务器单独挂载',
             default: false
         },
         folders: {
@@ -212,6 +217,7 @@ export const Config_InputSchema = {
         thread_number: {
             type: 'integer',
             title: '并发数',
+            description: '同时刮削的影片数量. NAS 性能有限或频繁超时时建议调低(如 20)',
             default: 50
         },
         thread_time: {
@@ -274,11 +280,13 @@ export const Config_InputSchema = {
         success_file_move: {
             type: 'boolean',
             title: '成功后移动文件',
+            description: '开启后刮削成功的影片会被移动到成功输出目录; 关闭则留在原地只生成元数据',
             default: true
         },
         failed_file_move: {
             type: 'boolean',
             title: '失败后移动文件',
+            description: '开启后刮削失败的文件会被移动到失败输出目录; 关闭则留在原地',
             default: true
         },
         success_file_rename: {
@@ -301,7 +309,8 @@ export const Config_InputSchema = {
                 '$ref': '#/components/schemas/DownloadableFile'
             },
             type: 'array',
-            title: '下载文件类型'
+            title: '下载文件类型',
+            description: '刮削时要下载保存的内容, 建议至少勾选 海报/缩略图/剧照/Nfo'
         },
         keep_files: {
             items: {
@@ -335,6 +344,7 @@ export const Config_InputSchema = {
             type: 'string',
             enum: ['info', 'speed', 'single'],
             title: '刮削模式',
+            description: 'info=完整刮削(推荐), speed=快速模式(少等超时), single=单文件模式',
             default: 'info'
         },
         website_single: {
@@ -659,16 +669,19 @@ export const Config_InputSchema = {
             minLength: 1,
             format: 'uri',
             title: 'Emby网址',
+            description: '媒体服务器的访问地址, 如 http://192.168.31.10:8096',
             default: 'http://127.0.0.1:8096/'
         },
         api_key: {
             type: 'string',
             title: 'API密钥',
+            description: '在媒体服务器 控制台→API密钥 里生成, 用于刮削后刷新媒体库和补全演员信息',
             default: ''
         },
         user_id: {
             type: 'string',
             title: '用户ID',
+            description: '媒体服务器的用户 ID, 可在 控制台→设备 或用户管理页的链接里找到',
             default: ''
         },
         emby_on: {
@@ -767,22 +780,26 @@ export const Config_InputSchema = {
         },
         use_proxy: {
             type: 'boolean',
-            title: '代理类型',
+            title: '使用代理',
+            description: '刮削源在国内无法直连时开启; Docker 部署时 compose 里已内置 clash 容器, 地址填 http://mdcx-clash:7890',
             default: false
         },
         proxy: {
             type: 'string',
             title: '代理地址',
+            description: 'HTTP 代理地址, 格式 http://主机:端口',
             default: 'http://127.0.0.1:7890'
         },
         timeout: {
             type: 'integer',
             title: '超时',
+            description: '单个网络请求的超时秒数, 网络慢时可调大',
             default: 10
         },
         retry: {
             type: 'integer',
             title: '重试',
+            description: '请求失败后的重试次数',
             default: 3
         },
         theporndb_api_token: {
@@ -824,6 +841,11 @@ export const Config_InputSchema = {
             type: 'boolean',
             title: '检查更新',
             default: true
+        },
+        wizard_done: {
+            type: 'boolean',
+            title: '初始化向导已完成',
+            default: false
         },
         local_library: {
             items: {
@@ -886,6 +908,7 @@ export const Config_OutputSchema = {
         media_path: {
             type: 'string',
             title: '媒体路径',
+            description: '影片所在的目录, 刮削程序会从这里扫描视频文件',
             default: '/media',
             uiSchema: {
                 customProps: {
@@ -913,6 +936,7 @@ export const Config_OutputSchema = {
         success_output_folder: {
             type: 'string',
             title: '成功输出目录',
+            description: '刮削成功的影片整理后存放的目录',
             default: 'JAV_output',
             uiSchema: {
                 customProps: {
@@ -927,6 +951,7 @@ export const Config_OutputSchema = {
         failed_output_folder: {
             type: 'string',
             title: '失败输出目录',
+            description: '刮削失败(识别不出番号等)的文件移到这里等待人工处理',
             default: 'failed',
             uiSchema: {
                 customProps: {
@@ -956,7 +981,8 @@ export const Config_OutputSchema = {
                 type: 'string'
             },
             type: 'array',
-            title: '媒体类型'
+            title: '媒体类型',
+            description: '只刮削这些扩展名的视频文件, 其他文件会被忽略'
         },
         sub_type: {
             items: {
@@ -973,6 +999,7 @@ export const Config_OutputSchema = {
         auto_link: {
             type: 'boolean',
             title: '自动创建软链接',
+            description: '刮削完成后在软链接路径生成指向影片的软链接, 适合给媒体服务器单独挂载',
             default: false
         },
         folders: {
@@ -1051,6 +1078,7 @@ export const Config_OutputSchema = {
         thread_number: {
             type: 'integer',
             title: '并发数',
+            description: '同时刮削的影片数量. NAS 性能有限或频繁超时时建议调低(如 20)',
             default: 50
         },
         thread_time: {
@@ -1113,11 +1141,13 @@ export const Config_OutputSchema = {
         success_file_move: {
             type: 'boolean',
             title: '成功后移动文件',
+            description: '开启后刮削成功的影片会被移动到成功输出目录; 关闭则留在原地只生成元数据',
             default: true
         },
         failed_file_move: {
             type: 'boolean',
             title: '失败后移动文件',
+            description: '开启后刮削失败的文件会被移动到失败输出目录; 关闭则留在原地',
             default: true
         },
         success_file_rename: {
@@ -1140,7 +1170,8 @@ export const Config_OutputSchema = {
                 '$ref': '#/components/schemas/DownloadableFile'
             },
             type: 'array',
-            title: '下载文件类型'
+            title: '下载文件类型',
+            description: '刮削时要下载保存的内容, 建议至少勾选 海报/缩略图/剧照/Nfo'
         },
         keep_files: {
             items: {
@@ -1174,6 +1205,7 @@ export const Config_OutputSchema = {
             type: 'string',
             enum: ['info', 'speed', 'single'],
             title: '刮削模式',
+            description: 'info=完整刮削(推荐), speed=快速模式(少等超时), single=单文件模式',
             default: 'info'
         },
         website_single: {
@@ -1498,16 +1530,19 @@ export const Config_OutputSchema = {
             minLength: 1,
             format: 'uri',
             title: 'Emby网址',
+            description: '媒体服务器的访问地址, 如 http://192.168.31.10:8096',
             default: 'http://127.0.0.1:8096/'
         },
         api_key: {
             type: 'string',
             title: 'API密钥',
+            description: '在媒体服务器 控制台→API密钥 里生成, 用于刮削后刷新媒体库和补全演员信息',
             default: ''
         },
         user_id: {
             type: 'string',
             title: '用户ID',
+            description: '媒体服务器的用户 ID, 可在 控制台→设备 或用户管理页的链接里找到',
             default: ''
         },
         emby_on: {
@@ -1606,22 +1641,26 @@ export const Config_OutputSchema = {
         },
         use_proxy: {
             type: 'boolean',
-            title: '代理类型',
+            title: '使用代理',
+            description: '刮削源在国内无法直连时开启; Docker 部署时 compose 里已内置 clash 容器, 地址填 http://mdcx-clash:7890',
             default: false
         },
         proxy: {
             type: 'string',
             title: '代理地址',
+            description: 'HTTP 代理地址, 格式 http://主机:端口',
             default: 'http://127.0.0.1:7890'
         },
         timeout: {
             type: 'integer',
             title: '超时',
+            description: '单个网络请求的超时秒数, 网络慢时可调大',
             default: 10
         },
         retry: {
             type: 'integer',
             title: '重试',
+            description: '请求失败后的重试次数',
             default: 3
         },
         theporndb_api_token: {
@@ -1663,6 +1702,11 @@ export const Config_OutputSchema = {
             type: 'boolean',
             title: '检查更新',
             default: true
+        },
+        wizard_done: {
+            type: 'boolean',
+            title: '初始化向导已完成',
+            default: false
         },
         local_library: {
             items: {

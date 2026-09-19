@@ -1,7 +1,20 @@
 # 项目交接文档
 
-> 最后更新：2026-09-19
+> 最后更新：2026-09-19（晚：易用性改造）
 > 用途：供新对话快速了解项目全貌，接续开发
+
+---
+
+## 〇、2026-09-19 晚：易用性改造（本轮）
+
+1. **侧边栏中文化**：`Layout.tsx` 菜单改为 首页/工具箱/网络/日志/设置/关于，顶栏改「MDCx 影片元数据刮削」。
+2. **设置页分区导航**：`settings.tsx` 重构为左侧分区列表（常用设置 3 区 + 高级选项 9 区），一次只渲染当前分区的字段（其余字段以 `ui:widget: hidden` 隐藏但保留值，跨分区修改不丢）。分区定义在 `SECTIONS` 常量；漏归类的字段自动落入「杂项」。`wizard_done` 字段已列入 `HIDDEN_FIELDS`。
+3. **常用字段加解释**：`models.py` 里 快速上手/媒体服务器/代理与网络 的字段补了 `description`（rjsf 渲染为字段下方的说明文字）；`ChipArrayField` 也支持渲染 description。
+4. **首次使用向导**：`WizardDialog.tsx`，首页检测 `wizard_done === false` 时弹出，三步：媒体库路径 → 整理方式（移动到输出目录/原地保留）→ 代理。完成或跳过都写入 `wizard_done: true`。存量 config.json 没有该字段，部署后首次打开会弹一次，点跳过即可。
+5. **IGNORE_* 从设置页隐藏**：`json_schema()` 给 download_files 的枚举标记 `deprecated`（`_mark_dead_download_options`），`ChipArrayField` 不再提供这 4 个选项；旧配置里已勾选的值仍显示中文名、可删除。枚举成员保留，解析不受影响。
+6. **修复设置页横向超宽**：容器加 `overflowX: hidden` + 分组标题 `overflowWrap: anywhere`（见 settings.tsx 根 Box）；表单根标题 "Config" 不再重复显示。
+
+遗留（本轮没做）：失败重试队列、定时扫描、刮削完通知 Emby 刷新、刮削前预览确认。
 
 ---
 

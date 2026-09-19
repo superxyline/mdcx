@@ -111,7 +111,7 @@ export const resetConfig = <ThrowOnError extends boolean = false>(options?: Opti
 
 /**
  * 创建配置文件
- * 创建指定名称的配置文件
+ * 创建指定名称的配置文件, 内容为默认配置
  */
 export const createConfig = <ThrowOnError extends boolean = false>(options: Options<CreateConfigData, ThrowOnError>) => {
     return (options.client ?? _heyApiClient).post<CreateConfigResponses, CreateConfigErrors, ThrowOnError>({

@@ -96,10 +96,25 @@ class Config(BaseModel):
     model_config = ConfigDict()
     # region: General Settings
     # 默认指向容器内媒体库挂载点, 与 docker-compose.yml 的挂载保持一致
-    media_path: str = ServerPathDirectory("/media", title="媒体路径", initial_path=SAFE_DIRS[0].as_posix())
+    media_path: str = ServerPathDirectory(
+        "/media",
+        title="媒体路径",
+        description="影片所在的目录, 刮削程序会从这里扫描视频文件",
+        initial_path=SAFE_DIRS[0].as_posix(),
+    )
     softlink_path: str = ServerPathDirectory("softlink", title="软链接路径", ref_field="media_path")
-    success_output_folder: str = ServerPathDirectory("JAV_output", title="成功输出目录", ref_field="media_path")
-    failed_output_folder: str = ServerPathDirectory("failed", title="失败输出目录", ref_field="media_path")
+    success_output_folder: str = ServerPathDirectory(
+        "JAV_output",
+        title="成功输出目录",
+        description="刮削成功的影片整理后存放的目录",
+        ref_field="media_path",
+    )
+    failed_output_folder: str = ServerPathDirectory(
+        "failed",
+        title="失败输出目录",
+        description="刮削失败(识别不出番号等)的文件移到这里等待人工处理",
+        ref_field="media_path",
+    )
     extrafanart_folder: str = ServerPathDirectory("extrafanart_copy", title="额外剧照目录")
     media_type: list[str] = Field(
         default_factory=lambda: [
@@ -116,6 +131,7 @@ class Config(BaseModel):
             ".mpg",
         ],
         title="媒体类型",
+        description="只刮削这些扩展名的视频文件, 其他文件会被忽略",
     )
     sub_type: list[str] = Field(
         default_factory=lambda: [
@@ -139,7 +155,11 @@ class Config(BaseModel):
         title="字幕类型",
     )
     scrape_softlink_path: bool = Field(default=False, title="刮削软链接路径")
-    auto_link: bool = Field(default=False, title="自动创建软链接")
+    auto_link: bool = Field(
+        default=False,
+        title="自动创建软链接",
+        description="刮削完成后在软链接路径生成指向影片的软链接, 适合给媒体服务器单独挂载",
+    )
     # endregion
 
     # region: Cleaning Settings
@@ -210,7 +230,11 @@ class Config(BaseModel):
     # endregion
 
     # region: Scraping Settings
-    thread_number: int = Field(default=50, title="并发数")
+    thread_number: int = Field(
+        default=50,
+        title="并发数",
+        description="同时刮削的影片数量. NAS 性能有限或频繁超时时建议调低(如 20)",
+    )
     thread_time: int = Field(default=0, title="线程时间")
     javdb_time: int = Field(default=10, title="Javdb时间")
     main_mode: int = Field(default=1, title="主模式")
@@ -222,8 +246,16 @@ class Config(BaseModel):
     update_d_folder: str = Field(default="number actor", title="更新D目录")
     update_titletemplate: str = Field(default="number title", title="更新标题模板")
     soft_link: int = Field(default=0, title="软链接")
-    success_file_move: bool = Field(default=True, title="成功后移动文件")
-    failed_file_move: bool = Field(default=True, title="失败后移动文件")
+    success_file_move: bool = Field(
+        default=True,
+        title="成功后移动文件",
+        description="开启后刮削成功的影片会被移动到成功输出目录; 关闭则留在原地只生成元数据",
+    )
+    failed_file_move: bool = Field(
+        default=True,
+        title="失败后移动文件",
+        description="开启后刮削失败的文件会被移动到失败输出目录; 关闭则留在原地",
+    )
     success_file_rename: bool = Field(default=True, title="成功后重命名文件")
     del_empty_folder: bool = Field(default=True, title="删除空目录")
     show_poster: bool = Field(default=True, title="显示海报")
@@ -240,6 +272,7 @@ class Config(BaseModel):
             DownloadableFile.IGNORE_SIZE,
         ],
         title="下载文件类型",
+        description="刮削时要下载保存的内容, 建议至少勾选 海报/缩略图/剧照/Nfo",
     )
     keep_files: list[KeepableFile] = Field(
         default_factory=lambda: [
@@ -274,7 +307,11 @@ class Config(BaseModel):
         ],
         title="Google搜图排除的网址",
     )
-    scrape_like: Literal["info", "speed", "single"] = Field(default="info", title="刮削模式")  # speed, info, single
+    scrape_like: Literal["info", "speed", "single"] = Field(
+        default="info",
+        title="刮削模式",
+        description="info=完整刮削(推荐), speed=快速模式(少等超时), single=单文件模式",
+    )  # speed, info, single
     # endregion
 
     # region: Website Settings
@@ -548,9 +585,21 @@ class Config(BaseModel):
 
     # region: Server Settings
     server_type: Literal["emby", "jellyfin"] = Field(default="emby", title="服务器类型")
-    emby_url: HttpUrl = Field(default=HttpUrl("http://127.0.0.1:8096"), title="Emby网址")
-    api_key: str = Field(default="", title="API密钥")
-    user_id: str = Field(default="", title="用户ID")
+    emby_url: HttpUrl = Field(
+        default=HttpUrl("http://127.0.0.1:8096"),
+        title="Emby网址",
+        description="媒体服务器的访问地址, 如 http://192.168.31.10:8096",
+    )
+    api_key: str = Field(
+        default="",
+        title="API密钥",
+        description="在媒体服务器 控制台→API密钥 里生成, 用于刮削后刷新媒体库和补全演员信息",
+    )
+    user_id: str = Field(
+        default="",
+        title="用户ID",
+        description="媒体服务器的用户 ID, 可在 控制台→设备 或用户管理页的链接里找到",
+    )
     emby_on: list[EmbyAction] = Field(
         default_factory=lambda: [
             EmbyAction.ACTOR_INFO_ZH_CN,
@@ -603,10 +652,26 @@ class Config(BaseModel):
     # endregion
 
     # region: Network Settings
-    use_proxy: bool = Field(default=False, title="代理类型")
-    proxy: str = Field(default="http://127.0.0.1:7890", title="代理地址")
-    timeout: int = Field(default=10, title="超时")
-    retry: int = Field(default=3, title="重试")
+    use_proxy: bool = Field(
+        default=False,
+        title="使用代理",
+        description="刮削源在国内无法直连时开启; Docker 部署时 compose 里已内置 clash 容器, 地址填 http://mdcx-clash:7890",
+    )
+    proxy: str = Field(
+        default="http://127.0.0.1:7890",
+        title="代理地址",
+        description="HTTP 代理地址, 格式 http://主机:端口",
+    )
+    timeout: int = Field(
+        default=10,
+        title="超时",
+        description="单个网络请求的超时秒数, 网络慢时可调大",
+    )
+    retry: int = Field(
+        default=3,
+        title="重试",
+        description="请求失败后的重试次数",
+    )
     theporndb_api_token: str = Field(default="", title="Theporndb API令牌")
     javdb: str = Field(default="", title="Javdb")
     javbus: str = Field(default="", title="Javbus")
@@ -621,6 +686,8 @@ class Config(BaseModel):
 
     # region: Misc Settings
     update_check: bool = Field(default=True, title="检查更新")
+    # 首次使用引导向导是否已完成; 完成或跳过后置 true, 不再弹出
+    wizard_done: bool = Field(default=False, title="初始化向导已完成")
     local_library: list[str] = Field(default_factory=list, title="本地库")
     actors_name: str = Field(default="", title="演员名称")
     netdisk_path: str = Field(default="", title="网盘路径")
@@ -893,13 +960,31 @@ class Config(BaseModel):
     @classmethod
     @lru_cache
     def json_schema(cls) -> dict[str, Any]:
-        return cls.model_json_schema()
+        schema = cls.model_json_schema()
+        _mark_dead_download_options(schema)
+        return schema
 
 
 @dataclass
 class CompatRule:
     # 添加必要注释
     notes: list = field(kw_only=True, default_factory=list)
+
+
+# 这 4 个「忽略有码/无码/FC2/国产」选项对应的封面跳过裁剪逻辑已删除, 勾选无任何效果;
+# 在设置表单的下拉选项中隐藏, 但枚举成员保留, 旧配置里已勾选的值仍能正常解析和显示.
+_DEAD_DOWNLOAD_OPTIONS = ("ignore_youma", "ignore_wuma", "ignore_fc2", "ignore_guochan")
+
+
+def _mark_dead_download_options(schema: dict[str, Any]) -> None:
+    """在 download_files 的 JSON Schema 中标记已失效的枚举选项, 由前端从可选列表中隐藏."""
+    targets = [schema.get("$defs", {}).get("DownloadableFile", {})]
+    items = schema.get("properties", {}).get("download_files", {}).get("items", {})
+    if items:
+        targets.append(items)
+    for target in targets:
+        if target.get("enum"):
+            target["deprecated"] = list(_DEAD_DOWNLOAD_OPTIONS)
 
 
 @dataclass

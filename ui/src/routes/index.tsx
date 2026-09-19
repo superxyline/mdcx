@@ -40,9 +40,12 @@ import {
   Tabs,
   Typography,
 } from "@mui/material";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link as RouterLink } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getCurrentConfig, getScrapeStatus, startScrape, stopScrape } from "@/client/sdk.gen";
+import { getCurrentConfigOptions } from "@/client/@tanstack/react-query.gen";
+import { getScrapeStatus, startScrape, stopScrape } from "@/client/sdk.gen";
+import { WizardDialog } from "@/components/WizardDialog";
 import { useScrapeStore } from "@/store/scrapeStore";
 
 export const Route = createFileRoute("/")({
@@ -89,6 +92,20 @@ function ScrapePage() {
   const [confirmStop, setConfirmStop] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState(0);
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  // 配置: 既用于展示刮削目录, 也用于判断是否弹出首次使用向导
+  const configQ = useQuery(getCurrentConfigOptions());
+  useEffect(() => {
+    if (configQ.data) setMediaPath(configQ.data.media_path ?? "");
+  }, [configQ.data]);
+
+  // 只在向导未完成时弹一次; 完成/跳过后 wizard_done 会持久化为 true
+  useEffect(() => {
+    if (configQ.isSuccess && configQ.data?.wizard_done === false) {
+      setWizardOpen(true);
+    }
+  }, [configQ.isSuccess, configQ.data]);
 
   // 状态轮询: 刷新页面或 WebSocket 断线后仍能拿到准确统计
   useEffect(() => {
@@ -112,12 +129,6 @@ function ScrapePage() {
   // 服务端留存了结果明细, 页面打开时补回浏览器关闭期间错过的条目
   useEffect(() => {
     void useScrapeStore.getState().loadHistory();
-  }, []);
-
-  useEffect(() => {
-    getCurrentConfig()
-      .then((res) => setMediaPath(res.data?.media_path ?? ""))
-      .catch((err) => console.error("获取配置失败:", err));
   }, []);
 
   const handleStart = useCallback(async () => {
@@ -270,6 +281,8 @@ function ScrapePage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {configQ.data && <WizardDialog open={wizardOpen} config={configQ.data} onClose={() => setWizardOpen(false)} />}
     </Box>
   );
 }

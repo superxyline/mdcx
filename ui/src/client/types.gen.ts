@@ -38,6 +38,7 @@ export type CleanAction = 'clean_ext' | 'clean_name' | 'clean_contains' | 'clean
 export type ConfigInput = {
     /**
      * 媒体路径
+     * 影片所在的目录, 刮削程序会从这里扫描视频文件
      */
     media_path?: string;
     /**
@@ -46,10 +47,12 @@ export type ConfigInput = {
     softlink_path?: string;
     /**
      * 成功输出目录
+     * 刮削成功的影片整理后存放的目录
      */
     success_output_folder?: string;
     /**
      * 失败输出目录
+     * 刮削失败(识别不出番号等)的文件移到这里等待人工处理
      */
     failed_output_folder?: string;
     /**
@@ -58,6 +61,7 @@ export type ConfigInput = {
     extrafanart_folder?: string;
     /**
      * 媒体类型
+     * 只刮削这些扩展名的视频文件, 其他文件会被忽略
      */
     media_type?: Array<string>;
     /**
@@ -70,6 +74,7 @@ export type ConfigInput = {
     scrape_softlink_path?: boolean;
     /**
      * 自动创建软链接
+     * 刮削完成后在软链接路径生成指向影片的软链接, 适合给媒体服务器单独挂载
      */
     auto_link?: boolean;
     /**
@@ -118,6 +123,7 @@ export type ConfigInput = {
     clean_enable?: Array<CleanAction>;
     /**
      * 并发数
+     * 同时刮削的影片数量. NAS 性能有限或频繁超时时建议调低(如 20)
      */
     thread_number?: number;
     /**
@@ -166,10 +172,12 @@ export type ConfigInput = {
     soft_link?: number;
     /**
      * 成功后移动文件
+     * 开启后刮削成功的影片会被移动到成功输出目录; 关闭则留在原地只生成元数据
      */
     success_file_move?: boolean;
     /**
      * 失败后移动文件
+     * 开启后刮削失败的文件会被移动到失败输出目录; 关闭则留在原地
      */
     failed_file_move?: boolean;
     /**
@@ -186,6 +194,7 @@ export type ConfigInput = {
     show_poster?: boolean;
     /**
      * 下载文件类型
+     * 刮削时要下载保存的内容, 建议至少勾选 海报/缩略图/剧照/Nfo
      */
     download_files?: Array<DownloadableFile>;
     /**
@@ -206,6 +215,7 @@ export type ConfigInput = {
     google_exclude?: Array<string>;
     /**
      * 刮削模式
+     * info=完整刮削(推荐), speed=快速模式(少等超时), single=单文件模式
      */
     scrape_like?: 'info' | 'speed' | 'single';
     /**
@@ -430,14 +440,17 @@ export type ConfigInput = {
     server_type?: 'emby' | 'jellyfin';
     /**
      * Emby网址
+     * 媒体服务器的访问地址, 如 http://192.168.31.10:8096
      */
     emby_url?: string;
     /**
      * API密钥
+     * 在媒体服务器 控制台→API密钥 里生成, 用于刮削后刷新媒体库和补全演员信息
      */
     api_key?: string;
     /**
      * 用户ID
+     * 媒体服务器的用户 ID, 可在 控制台→设备 或用户管理页的链接里找到
      */
     user_id?: string;
     /**
@@ -510,19 +523,23 @@ export type ConfigInput = {
      */
     mark_pos_hd?: string;
     /**
-     * 代理类型
+     * 使用代理
+     * 刮削源在国内无法直连时开启; Docker 部署时 compose 里已内置 clash 容器, 地址填 http://mdcx-clash:7890
      */
     use_proxy?: boolean;
     /**
      * 代理地址
+     * HTTP 代理地址, 格式 http://主机:端口
      */
     proxy?: string;
     /**
      * 超时
+     * 单个网络请求的超时秒数, 网络慢时可调大
      */
     timeout?: number;
     /**
      * 重试
+     * 请求失败后的重试次数
      */
     retry?: number;
     /**
@@ -557,6 +574,10 @@ export type ConfigInput = {
      * 检查更新
      */
     update_check?: boolean;
+    /**
+     * 初始化向导已完成
+     */
+    wizard_done?: boolean;
     /**
      * 本地库
      */
@@ -601,6 +622,7 @@ export type ConfigInput = {
 export type ConfigOutput = {
     /**
      * 媒体路径
+     * 影片所在的目录, 刮削程序会从这里扫描视频文件
      */
     media_path?: string;
     /**
@@ -609,10 +631,12 @@ export type ConfigOutput = {
     softlink_path?: string;
     /**
      * 成功输出目录
+     * 刮削成功的影片整理后存放的目录
      */
     success_output_folder?: string;
     /**
      * 失败输出目录
+     * 刮削失败(识别不出番号等)的文件移到这里等待人工处理
      */
     failed_output_folder?: string;
     /**
@@ -621,6 +645,7 @@ export type ConfigOutput = {
     extrafanart_folder?: string;
     /**
      * 媒体类型
+     * 只刮削这些扩展名的视频文件, 其他文件会被忽略
      */
     media_type?: Array<string>;
     /**
@@ -633,6 +658,7 @@ export type ConfigOutput = {
     scrape_softlink_path?: boolean;
     /**
      * 自动创建软链接
+     * 刮削完成后在软链接路径生成指向影片的软链接, 适合给媒体服务器单独挂载
      */
     auto_link?: boolean;
     /**
@@ -681,6 +707,7 @@ export type ConfigOutput = {
     clean_enable?: Array<CleanAction>;
     /**
      * 并发数
+     * 同时刮削的影片数量. NAS 性能有限或频繁超时时建议调低(如 20)
      */
     thread_number?: number;
     /**
@@ -729,10 +756,12 @@ export type ConfigOutput = {
     soft_link?: number;
     /**
      * 成功后移动文件
+     * 开启后刮削成功的影片会被移动到成功输出目录; 关闭则留在原地只生成元数据
      */
     success_file_move?: boolean;
     /**
      * 失败后移动文件
+     * 开启后刮削失败的文件会被移动到失败输出目录; 关闭则留在原地
      */
     failed_file_move?: boolean;
     /**
@@ -749,6 +778,7 @@ export type ConfigOutput = {
     show_poster?: boolean;
     /**
      * 下载文件类型
+     * 刮削时要下载保存的内容, 建议至少勾选 海报/缩略图/剧照/Nfo
      */
     download_files?: Array<DownloadableFile>;
     /**
@@ -769,6 +799,7 @@ export type ConfigOutput = {
     google_exclude?: Array<string>;
     /**
      * 刮削模式
+     * info=完整刮削(推荐), speed=快速模式(少等超时), single=单文件模式
      */
     scrape_like?: 'info' | 'speed' | 'single';
     /**
@@ -993,14 +1024,17 @@ export type ConfigOutput = {
     server_type?: 'emby' | 'jellyfin';
     /**
      * Emby网址
+     * 媒体服务器的访问地址, 如 http://192.168.31.10:8096
      */
     emby_url?: string;
     /**
      * API密钥
+     * 在媒体服务器 控制台→API密钥 里生成, 用于刮削后刷新媒体库和补全演员信息
      */
     api_key?: string;
     /**
      * 用户ID
+     * 媒体服务器的用户 ID, 可在 控制台→设备 或用户管理页的链接里找到
      */
     user_id?: string;
     /**
@@ -1073,19 +1107,23 @@ export type ConfigOutput = {
      */
     mark_pos_hd?: string;
     /**
-     * 代理类型
+     * 使用代理
+     * 刮削源在国内无法直连时开启; Docker 部署时 compose 里已内置 clash 容器, 地址填 http://mdcx-clash:7890
      */
     use_proxy?: boolean;
     /**
      * 代理地址
+     * HTTP 代理地址, 格式 http://主机:端口
      */
     proxy?: string;
     /**
      * 超时
+     * 单个网络请求的超时秒数, 网络慢时可调大
      */
     timeout?: number;
     /**
      * 重试
+     * 请求失败后的重试次数
      */
     retry?: number;
     /**
@@ -1120,6 +1158,10 @@ export type ConfigOutput = {
      * 检查更新
      */
     update_check?: boolean;
+    /**
+     * 初始化向导已完成
+     */
+    wizard_done?: boolean;
     /**
      * 本地库
      */

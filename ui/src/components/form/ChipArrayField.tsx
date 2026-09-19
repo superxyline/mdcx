@@ -24,6 +24,7 @@ import {
   Menu,
   OutlinedInput,
   TextField,
+  Typography,
 } from "@mui/material";
 import { getDefaultRegistry } from "@rjsf/core";
 import type { FieldProps, RJSFSchema } from "@rjsf/utils";
@@ -68,7 +69,9 @@ const ChipArrayField = ({ schema, uiSchema, onChange, formData, rawErrors, idSch
   const enumOptions = itemSchema.enum as string[] | undefined;
   const [data, setData] = useState((formData as string[]) || []);
   const enumNames = (itemSchema.showNames || enumOptions) as string[] | undefined; // 约定使用 showNames 字段定义显示名称
-  const unused = enumOptions?.filter((opt) => !data.includes(opt));
+  // schema 中标记为 deprecated 的枚举值不再提供选择, 但旧配置里已有的值仍原样显示
+  const deprecated = (itemSchema.deprecated as string[] | undefined) ?? [];
+  const unused = enumOptions?.filter((opt) => !data.includes(opt) && !deprecated.includes(opt));
   useEffect(() => onChange(data), [data, onChange]);
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -136,6 +139,11 @@ const ChipArrayField = ({ schema, uiSchema, onChange, formData, rawErrors, idSch
         {uiSchema?.["ui:title"] || title || label}
         {required ? "*" : ""}
       </InputLabel>
+      {schema.description && (
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+          {schema.description}
+        </Typography>
+      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
