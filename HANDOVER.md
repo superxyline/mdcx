@@ -1,6 +1,6 @@
 # 项目交接文档
 
-> 最后更新：2026-09-18
+> 最后更新：2026-09-19
 > 用途：供新对话快速了解项目全貌，接续开发
 
 ---
@@ -44,110 +44,60 @@
 
 ---
 
-## 三、本次会话完成的工作
+## 三、2026-09-19 会话完成的工作
 
-### 1. 设置页无法保存（前端）
+### 1. ABP-646 封面不裁剪（根因确认 + 彻底修复）
 
-**根因**：`ui/src/routes/settings.tsx` 的 `onSubmit` 是空函数，整个前端没有一处调用后端的配置保存接口。
+上次会话只把 4 个 `IGNORE_*` 从**默认配置**移除，对 NAS 上的**存量 config.json 无效**——
+里面勾过的 `ignore_youma` 让有码片在 `core/web.py` 直接复制横版 thumb 跳过裁剪。
+本次删除了整个跳过分支：**无论配置怎么勾，封面都走裁剪**（FC2/无码居中、国产右侧不变）。
+枚举值保留，旧配置解析不报错。NAS 上无需改 config.json，更新代码即可。
 
-**修复**：接上 `updateConfigMutation`；用本地草稿 + 内容比对判断是否有改动；
-把保存按钮改为**固定在屏幕右下角的悬浮栏**——因为设置页有 100+ 字段、总高 2 万多像素，
-原来的按钮在文档最底部，用户根本找不到（这是"保存不了"的真正原因）。
+### 2. 改配置需重启容器（已修）
 
-### 2. 刮削成功率低（配置）
+`update_config` 现在重建 `manager.computed`，代理/超时等改完立即生效。
+有回归测试 `tests/test_server_api.py`。
 
-**根因**：默认字段来源优先级是 `theporndb → official → dmm → javdb`，
-但这四个源**全部不可用**（theporndb 无 token 且是欧美站、official 前缀表缺新番号、
-dmm 需无头浏览器、javdb 无 Cookie）；而实测可用的 **javbus/jav321 根本不在列表里**。
+### 3. 结果明细刷新丢失（已修）
 
-**修复**：优先级改为 `official → javbus → jav321 → javdb → dmm`，
-图片类字段（thumb/poster/extrafanart）改为 `javbus → dmm → theporndb`。
+新增 `mdcx/server/result_buffer.py` 环形缓冲（2000 条），信号写 WS 的同时留存；
+`GET /api/v1/scrape/results` 供页面加载时补回；新一轮刮削开始时清空。
+前端 `scrapeStore.loadHistory()` 在主页加载时拉取并合并到实时推送之前。
 
-### 3. 官网番号前缀表过时（代码）
+### 4. 设置页配置管理入口（已补）
 
-S1 从 2024 年起主力番号改为 SONE/SNOS，但 `mdcx/manual.py` 的 `OFFICIAL` 表里没有，
-导致新片一律报「不在官网番号前缀列表中」。已补 `sone|snos`。
+新增 `GET /config/list`；设置页顶部新增配置栏：切换/新建/删除/重置为默认（均带确认），
+切换后重置表单草稿。顺带修了 `create` 写 v1 ini 到 `.json` 导致 switch 静默回落默认配置的问题。
+浏览器端到端实测通过（新建→切换→切回→删除）。
 
-> 仍约有 40 个前缀无官网支持（STARS/START/MIDA/MXGS 等），由 javbus/jav321 兜底。
+### 5. 无官网支持前缀：实测结论是**不能补**
 
-### 4. 文件名被加上 `-cd3`（配置）
-
-**根因**：`cd_char` 里的 `endc` 让字母 `c` 被当作「第 3 集」，
-而 `-C` 本意是**中文字幕标记**（`cnword_char` 里明确定义了 `-C.`）。
-`SONE-647-C.mp4` 因此被刮成 `SONE-647-cd3.mp4`。
-
-**修复**：从 `cd_char` 移除 `endc`。
-
-### 5. 封面没有裁剪成竖版（配置）
-
-**根因**：`core/web.py:692` 有段逻辑——若 `download_files` 里勾了 `IGNORE_YOUMA`，
-有码片的封面会**直接复制缩略图**而不走裁剪。
-
-**修复**：移除 `ignore_youma` / `ignore_wuma` / `ignore_fc2` / `ignore_guochan`。
-现在封面正确裁剪为 `379x538`（与旧桌面版产物的 `379x539` 一致）。
-
-### 6. 加水印抛异常（代码）
-
-**根因**：摘除 Qt 层时**误删了 `resources/Img`**，但加水印的代码仍在，
-每次 `Image.open(mark_pic_path)` 都抛异常。
-
-**修复**：`git checkout before-qt-removal -- resources/Img` 恢复。
-水印图标会复制到 `/data/userdata/watermark/`。注意该目录还带回了若干 Qt 用的 svg/ico，可清理。
-
-### 7. WebSocket 日志推送失败（代码）
-
-**根因**：`mdcx/server/ws/types.py` 的 `to_json` 用 `json.dumps` 直接序列化，
-日志里夹带 `Path` 对象时整条消息推送失败，表现为界面日志时断时续。
-
-**修复**：加 `default=str`。
-
-### 8. 固化开箱默认配置（代码）
-
-把调优结果写进 `mdcx/config/models.py` 的默认值，让新装用户开箱即用：
-
-| 配置项 | 默认值 |
-|---|---|
-| `media_path` | `/media`（与 docker-compose 挂载一致） |
-| `suffix_sort` | `[]`（文件名纯番号） |
-| `cd_char` | 不含 `endc` |
-| `download_files` | 去掉 预告片/主题片/原始剧照/剧照附加 与 4 个 `IGNORE_*` |
-| `keep_files` | 去掉 预告片/主题片 |
-| `field_configs` 站点优先级 | 见上文第 2 条 |
-| `field_configs` 语言 | title/outline/originaltitle/originalplot → `zh_cn` |
-
-> 这些**只影响全新安装**（无 `config.json` 时）；已有配置和 v1 老配置迁移都不受影响。
-
-### 9. README 重写
-
-从「项目说明」改成「照着做」：一句话简介 + 特性表 + 四步 Docker 部署 + 开箱默认配置说明 +
-常见问题。已通过 GitHub API 上线。
+`official.py` 的 xpath 强耦合 FANZA 系官网统一模板（`p-workPage__title` 等类名）。
+两轮实测 SOD/MAXING/TMA/CENTER VILLAGE/CRYSTAL/ALICE JAPAN/NaturalHigh/Nagae 等
+均非该模板（搜索路径 404 或无结果），模板体系内的官网上游已收录较全。
+**盲目补表 = 每次刮削白等一次请求超时**，故不补。验证脚本保留在
+`scripts/check_official_sites.py`，将来想复核直接改候选列表重跑。
+缺失前缀（STARS/START/MIDA/MXGS 等）由 javbus/jav321 兜底，功能无损失。
 
 ---
 
-## 四、遗留事项
+## 四、上一轮（09-18）完成的工作（摘要）
 
-### 1. 本地与远端 commit 不一致（低优先级）
+1. 设置页接上保存接口，保存按钮改右下角悬浮栏
+2. 站点优先级改 `official → javbus → jav321 → javdb → dmm`，图片类 `javbus → dmm → theporndb`
+3. 官网前缀表补 `sone|snos`
+4. `cd_char` 移除 `endc`（`-C` 是中文字幕标记，不再误判成第 3 集）
+5. 默认 `download_files` 去掉 4 个 `IGNORE_*`（见本轮第 1 条，当时不彻底）
+6. 从 `before-qt-removal` 恢复被误删的 `resources/Img`（水印图标）
+7. WS `to_json` 加 `default=str`
+8. 调优结果固化进 `config/models.py` 默认值（仅新装生效）
+9. README 重写为部署教程
 
-推送 README 时 GitHub 直连中断，改用 API 提交（远端 `632c893`），
-本地是 `a7a2d1f`——**内容完全相同**（md5 一致），只是 hash 不同。
+---
 
-下次推送前先对齐（网络恢复后）：
+## 五、遗留事项
 
-```bash
-cd /e/codex/mdcx
-git fetch github master
-git reset --soft github/master
-```
-
-### 2. 改配置后需要重启容器（后端设计缺陷）
-
-`mdcx/server/api/v1/config.py` 的 `update_config` 只写文件、**不重建 `manager.computed`**
-（只有 `load()` 才会重建，见 `mdcx/config/manager.py:43`）。
-所以改代理之类的设置后，**必须重启容器**才生效。
-
-> 注意：字段优先级（`field_configs`）是直接读 `manager.config` 的，改完立即生效，不受影响。
-
-### 3. Clash 规则会导致内网流量绕行
+### 1. Clash 规则会导致内网流量绕行
 
 `clash/config.yaml` 的规则是 `MATCH,节点选择`（全部走代理，因为 `GEOIP,CN,DIRECT` 会导致
 内核启动时下载 MMDB 失败）。mdcx 走代理后访问内网 Emby/Jellyfin 也会绕道节点。
@@ -160,17 +110,17 @@ git reset --soft github/master
 - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
 ```
 
-### 4. 部分配置接口前端无入口
+### 2. 设置页横向超宽（低优先级，上游遗留）
 
-`resetConfig` / `createConfig` / `switchConfig` / `deleteConfig` 四个接口后端有、前端无 UI。
-即 Web 版目前只能有一个配置文件，也不能「重置为默认」。
+rjsf 表单里 `FieldConfig` 分组的 H5 标题把 `body scrollWidth` 撑到约 1676px（视口 1280），
+页面底部出现水平滚动条。与配置栏无关（其宽度正常），修复需调 rjsf 分组标题样式。
 
-### 5. 结果明细刷新后丢失
+### 3. IGNORE_* 选项仍在设置页显示
 
-成功/失败列表靠 WebSocket 实时推送，浏览器关闭期间的条目不留存。统计数字能恢复，列表是空的。
-要补齐需在后端做结果环形缓冲。
+枚举值保留是为了兼容存量配置解析；这 4 个「忽略有码/无码/FC2/国产」勾选已无任何效果，
+但设置页里还在显示。可从 ui_schema 隐藏。
 
-### 6. 其他
+### 4. 其他
 
 - 单文件刮削接口（`/api/v1/legacy/scrape/single`）**必须传 URL**，空 URL 会报 Unsupported URL
 - 设置页的 媒体路径/软链接路径/输出目录 等字段是**只读**的（`ServerPathField`），
@@ -304,8 +254,10 @@ mdcx/
 
 按优先级：
 
-1. **修 `update_config` 不重建 computed 的问题**（改一行，让配置改完立即生效，不用重启）
-2. 给结果明细做服务端留存（解决刷新丢失）
-3. 补设置页缺失的配置入口（重置/新建/切换/删除配置）
-4. 核实并补充其余无官网支持的前缀（需逐个确认官网域名，补错会让每次刮削白等超时）
+1. **把本轮改动部署到 NAS**：`sudo docker compose up -d --build` 重建镜像（fnOS 构建坑见「踩过的坑」10），
+   前端也可用 `docker cp` 快速部署（见「常用命令」）
+2. **重刮历史有码片**：存量 `config.json` 勾过的 `ignore_youma` 让之前刮的有码片封面是横版
+   （如 ABP-646），代码修复只对新刮削生效；旧的要用「重新刮削」模式跑一遍才会裁剪
+3. Clash 规则加内网直连（见遗留事项 1）
+4. 修设置页横向超宽（见遗留事项 2）、隐藏失效的 IGNORE_* 选项（见遗留事项 3）
 5. 按需补充 README 截图
