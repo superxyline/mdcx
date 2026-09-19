@@ -70,7 +70,9 @@ def _nfo_to_result(nfo: Path, media_types: list[str]) -> ResultItem | None:
     )
     video_exts = {ext.lower() for ext in media_types}
     video = next((p for p in nfo.parent.iterdir() if p.suffix.lower() in video_exts), None)
-    poster, fanart = nfo.parent / "poster.jpg", nfo.parent / "fanart.jpg"
+    # 封面文件名大小写不敏感 (Jellyfin 等工具常写 Poster.jpg)
+    poster = next((p for p in nfo.parent.iterdir() if p.name.lower() == "poster.jpg"), None)
+    fanart = next((p for p in nfo.parent.iterdir() if p.name.lower() == "fanart.jpg"), None)
     try:
         ts = nfo.stat().st_mtime
     except OSError:
@@ -87,8 +89,8 @@ def _nfo_to_result(nfo: Path, media_types: list[str]) -> ResultItem | None:
             "year": release[:4] if release else "",
             "number": number,
             "mosaic": text("mosaic"),
-            "poster_path": str(poster) if poster.is_file() else "",
-            "fanart_path": str(fanart) if fanart.is_file() else "",
+            "poster_path": str(poster) if poster and poster.is_file() else "",
+            "fanart_path": str(fanart) if fanart and fanart.is_file() else "",
             "file_path": str(video) if video else "",
             "folder_path": str(nfo.parent),
             "nfo_path": str(nfo),
@@ -151,21 +153,35 @@ class BackfillResponse(BaseModel):
 
 @router.post("/backfill", operation_id="backfillHistory", summary="从媒体库导入历史刮削记录")
 async def backfill_history() -> BackfillResponse:
-    """扫描成功输出目录里的 NFO 文件, 把之前刮削好的影片回填成成功记录.
+    """扫描媒体库和成功输出目录里的 NFO 文件, 把之前刮削好的影片回填成成功记录.
 
     用于老用户升级后把历史成果找回结果列表; 按 NFO/文件路径去重, 重复导入无害.
     """
     from mdcx.config.manager import manager
 
-    root = _resolve_output_root(manager)
-    try:
-        check_path_access(root, *SAFE_DIRS)
-    except HTTPException:
-        raise HTTPException(
-            status_code=400,
-            detail=f"成功输出目录不在可访问范围内: {root}. 请先在设置里把它配置到媒体库路径之下.",
-        )
-    nfo_files = await asyncio.to_thread(_find_nfo_files, root)
+    roots: list[Path] = []
+    for candidate in (_resolve_output_root(manager), Path(manager.config.media_path)):
+        try:
+            check_path_access(candidate, *SAFE_DIRS)
+        except HTTPException:
+            continue  # 单个目录越界只跳过, 不整体失败
+        if candidate.is_dir() and candidate not in roots:
+            roots.append(candidate)
+    if not roots:
+        raise HTTPException(status_code=400, detail="媒体库和成功输出目录都不存在或不可访问, 请先在设置里配置.")
+
+    scanned = 0
+    seen: set[Path] = set()
+    nfo_files: list[Path] = []
+    for root in roots:
+        for nfo in await asyncio.to_thread(_find_nfo_files, root):
+            if nfo not in seen:
+                seen.add(nfo)
+                nfo_files.append(nfo)
+        scanned = len(nfo_files)
+        if scanned >= MAX_BACKFILL_SCAN:
+            nfo_files = nfo_files[:MAX_BACKFILL_SCAN]
+            break
     existing = result_buffer.existing_keys()
     imported = 0
     for nfo in nfo_files:
@@ -176,7 +192,7 @@ async def backfill_history() -> BackfillResponse:
             continue
         result_buffer.add_result(item.status, item.name, item.real_number, detail=item.detail, ts=item.ts)
         imported += 1
-    return BackfillResponse(scanned=len(nfo_files), imported=imported)
+    return BackfillResponse(scanned=scanned, imported=imported)
 
 
 @router.get("/status", operation_id="getScrapeStatus", summary="获取刮削状态")
