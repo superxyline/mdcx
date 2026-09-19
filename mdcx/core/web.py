@@ -687,33 +687,16 @@ async def poster_download(
             LogBuffer.log().write(f"\n 🍀 Poster done! (copy cd-poster)({get_used_time(start_time)}s)")
             return True
 
-    # 勾选复制 thumb时：国产，复制thumb；无码，勾选不裁剪时，也复制thumb
+    # 确定 thumb 裁剪方式: FC2/无码居中裁剪, 国产右侧裁剪, 有码默认左侧裁剪
+    # 注意: 不再支持 IGNORE_* 跳过裁剪直接复制 thumb, 存量配置里勾了也无效
     if thumb_path:
         mosaic = result.mosaic
-        number = result.number
-        copy_flag = False
-        if number.startswith("FC2"):
+        if result.number.startswith("FC2"):
             image_cut = "center"
-            if DownloadableFile.IGNORE_FC2 in download_files:
-                copy_flag = True
         elif mosaic == "国产" or mosaic == "國產":
             image_cut = "right"
-            if DownloadableFile.IGNORE_GUOCHAN in download_files:
-                copy_flag = True
         elif mosaic == "无码" or mosaic == "無碼" or mosaic == "無修正":
             image_cut = "center"
-            if DownloadableFile.IGNORE_WUMA in download_files:
-                copy_flag = True
-        elif mosaic == "有码" or mosaic == "有碼":
-            if DownloadableFile.IGNORE_YOUMA in download_files:
-                copy_flag = True
-        if copy_flag:
-            await copy_file_async(thumb_path, poster_final_path)
-            other.poster_marked = other.thumb_marked
-            result.poster_from = "copy thumb"
-            other.poster_path = poster_final_path
-            LogBuffer.log().write(f"\n 🍀 Poster done! (copy thumb)({get_used_time(start_time)}s)")
-            return True
 
     # 获取高清 poster
     await _get_big_poster(result, other)
