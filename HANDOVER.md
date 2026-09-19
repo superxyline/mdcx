@@ -15,9 +15,11 @@
    失败原因明细(failed_details)同样持久化。
 2. **记录带预览元数据**：`signals._result_detail()` 从 ShowData 提取 标题/演员/发行日期/番号/
    马赛克/海报路径/fanart路径/文件路径/目录，随记录一起存。前端实时推送和 REST 都带 detail。
-3. **历史导入**：`POST /api/v1/scrape/backfill`（首页右上「导入历史」按钮）。扫描成功输出目录
-   (相对路径按 extend.py 同款规则解析)下所有 NFO，解析 title/num/actor/releasedate 生成成功记录，
-   按 nfo_path/file_path 去重，时间戳用 NFO mtime。老用户升级后点一下即可找回全部历史成果。
+3. **历史导入**：`POST /api/v1/scrape/backfill`（首页右上「导入历史」按钮）。扫描**成功输出目录 + 媒体库根目录**
+   两个位置下所有 NFO，解析 title/num/actor/releasedate 生成成功记录，按 nfo_path/file_path 去重，
+   时间戳用 NFO mtime。解析失败的 NFO 直接跳过（比如种子自带的 ASCII 艺术字说明文件）。
+   注意：NAS 上旧配置指向已不存在的 /media/待刮削，2026-09-19 晚已把 media_path 改成 /media。
+   老用户升级后点一下即可找回历史成果（前提是刮削产物还在媒体库里）。
 4. **前端预览**：`ResultDetail.tsx`。列表项带封面缩略图(`PosterThumb`，blob URL 带 API Key 认证)，
    点击弹出详情(封面大图+元数据+文件路径)；详情里「在工具箱中裁剪封面」跳 `/tool?cutterPath=...`
    (tool.tsx 加了 validateSearch，PosterCutter 加 initialPath 自动载入)。失败页底部展示失败原因明细。
