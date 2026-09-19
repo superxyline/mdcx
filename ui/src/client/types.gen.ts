@@ -1159,6 +1159,22 @@ export type ConfigOutput = {
 };
 
 /**
+ * ConfigListResponse
+ */
+export type ConfigListResponse = {
+    /**
+     * Current
+     * 当前激活的配置文件名 (不含扩展名)
+     */
+    current: string;
+    /**
+     * Configs
+     * 配置文件夹中的所有配置文件名 (不含扩展名)
+     */
+    configs: Array<string>;
+};
+
+/**
  * ConfigSwitchResponse
  */
 export type ConfigSwitchResponse = {
@@ -1483,6 +1499,43 @@ export type ScrapeFileBody = {
 };
 
 /**
+ * ScrapeResultEntry
+ */
+export type ScrapeResultEntry = {
+    /**
+     * Status
+     * "succ" 或 "fail"
+     */
+    status: string;
+    /**
+     * Name
+     * 列表显示名
+     */
+    name: string;
+    /**
+     * Real Number
+     * 识别出的番号
+     */
+    real_number: string;
+};
+
+/**
+ * ScrapeResults
+ * 刮削结果明细, 服务端留存的部分 (浏览器关闭期间的条目也在).
+ */
+export type ScrapeResults = {
+    /**
+     * Results
+     */
+    results: Array<ScrapeResultEntry>;
+    /**
+     * Failed Details
+     * 失败原因明细, 与 results 中 fail 条目按时间对应
+     */
+    failed_details: Array<string>;
+};
+
+/**
  * ScrapeStatus
  * 当前刮削状态快照.
  */
@@ -1759,6 +1812,22 @@ export type UpdateConfigResponses = {
 };
 
 export type UpdateConfigResponse = UpdateConfigResponses[keyof UpdateConfigResponses];
+
+export type ListConfigsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/config/list';
+};
+
+export type ListConfigsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConfigListResponse;
+};
+
+export type ListConfigsResponse = ListConfigsResponses[keyof ListConfigsResponses];
 
 export type ResetConfigData = {
     body?: never;
@@ -2092,6 +2161,22 @@ export type SetSiteUrlResponses = {
      */
     200: unknown;
 };
+
+export type GetScrapeResultsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/scrape/results';
+};
+
+export type GetScrapeResultsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScrapeResults;
+};
+
+export type GetScrapeResultsResponse = GetScrapeResultsResponses[keyof GetScrapeResultsResponses];
 
 export type GetScrapeStatusData = {
     body?: never;

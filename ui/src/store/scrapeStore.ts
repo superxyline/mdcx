@@ -11,6 +11,7 @@
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { getScrapeResults } from "@/client/sdk.gen";
 import type { ScrapeStatus } from "@/client/types.gen";
 import type { LogEntry, WebSocketMessage } from "@/hooks/useWebSocket";
 
@@ -47,6 +48,8 @@ interface ScrapeState {
   setProgress: (progress: number) => void;
   setRunning: (running: boolean) => void;
   handleQtSignal: (msg: WebSocketMessage<LogEntry>) => void;
+  /** 页面加载时拉取服务端留存的结果明细, 补回浏览器关闭期间错过的推送 */
+  loadHistory: () => Promise<void>;
   clearResults: () => void;
 }
 
@@ -153,6 +156,29 @@ export const useScrapeStore = create<ScrapeState>()(
 
         default:
           break;
+      }
+    },
+
+    loadHistory: async () => {
+      try {
+        const res = await getScrapeResults();
+        const data = res.data;
+        if (!data) return;
+        set((state) => {
+          // 历史条目在前, 拉取期间可能已有少量实时条目进来, 保持在后面
+          const history = data.results.map((r) => ({
+            id: nextId(),
+            name: r.name,
+            status: r.status === "succ" ? ("succ" as const) : ("fail" as const),
+            realNumber: r.real_number,
+          }));
+          return {
+            results: [...history, ...state.results].slice(-MAX_RESULTS),
+            failedDetails: [...data.failed_details, ...state.failedDetails].slice(-MAX_FAILED_DETAILS),
+          };
+        });
+      } catch (err) {
+        console.error("加载历史结果失败:", err);
       }
     },
 

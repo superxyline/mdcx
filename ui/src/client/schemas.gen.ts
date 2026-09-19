@@ -47,7 +47,7 @@ export const Config_InputSchema = {
         media_path: {
             type: 'string',
             title: '媒体路径',
-            default: './media',
+            default: '/media',
             uiSchema: {
                 customProps: {
                     initialPath: 'C:/Users/13017',
@@ -886,7 +886,7 @@ export const Config_OutputSchema = {
         media_path: {
             type: 'string',
             title: '媒体路径',
-            default: './media',
+            default: '/media',
             uiSchema: {
                 customProps: {
                     initialPath: 'C:/Users/13017',
@@ -1720,6 +1720,27 @@ export const Config_OutputSchema = {
     title: 'Config'
 } as const;
 
+export const ConfigListResponseSchema = {
+    properties: {
+        current: {
+            type: 'string',
+            title: 'Current',
+            description: '当前激活的配置文件名 (不含扩展名)'
+        },
+        configs: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Configs',
+            description: '配置文件夹中的所有配置文件名 (不含扩展名)'
+        }
+    },
+    type: 'object',
+    required: ['current', 'configs'],
+    title: 'ConfigListResponse'
+} as const;
+
 export const ConfigSwitchResponseSchema = {
     properties: {
         config: {
@@ -2141,6 +2162,53 @@ export const ScrapeFileBodySchema = {
     type: 'object',
     required: ['path', 'url'],
     title: 'ScrapeFileBody'
+} as const;
+
+export const ScrapeResultEntrySchema = {
+    properties: {
+        status: {
+            type: 'string',
+            title: 'Status',
+            description: '"succ" 或 "fail"'
+        },
+        name: {
+            type: 'string',
+            title: 'Name',
+            description: '列表显示名'
+        },
+        real_number: {
+            type: 'string',
+            title: 'Real Number',
+            description: '识别出的番号'
+        }
+    },
+    type: 'object',
+    required: ['status', 'name', 'real_number'],
+    title: 'ScrapeResultEntry'
+} as const;
+
+export const ScrapeResultsSchema = {
+    properties: {
+        results: {
+            items: {
+                '$ref': '#/components/schemas/ScrapeResultEntry'
+            },
+            type: 'array',
+            title: 'Results'
+        },
+        failed_details: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Failed Details',
+            description: '失败原因明细, 与 results 中 fail 条目按时间对应'
+        }
+    },
+    type: 'object',
+    required: ['results', 'failed_details'],
+    title: 'ScrapeResults',
+    description: '刮削结果明细, 服务端留存的部分 (浏览器关闭期间的条目也在).'
 } as const;
 
 export const ScrapeStatusSchema = {

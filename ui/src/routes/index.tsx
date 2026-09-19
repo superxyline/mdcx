@@ -109,6 +109,11 @@ function ScrapePage() {
     };
   }, []);
 
+  // 服务端留存了结果明细, 页面打开时补回浏览器关闭期间错过的条目
+  useEffect(() => {
+    void useScrapeStore.getState().loadHistory();
+  }, []);
+
   useEffect(() => {
     getCurrentConfig()
       .then((res) => setMediaPath(res.data?.media_path ?? ""))

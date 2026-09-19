@@ -1,15 +1,34 @@
-import { Button, FormControl, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  FormControl,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import type { IChangeEvent } from "@rjsf/core";
 import { Form } from "@rjsf/mui";
 import type { RJSFSchema } from "@rjsf/utils";
 import validator from "@rjsf/validator-ajv8";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
+  createConfigMutation,
+  deleteConfigMutation,
   getConfigSchemaOptions,
   getConfigUiSchemaOptions,
   getCurrentConfigOptions,
+  listConfigsOptions,
+  resetConfigMutation,
+  switchConfigMutation,
   updateConfigMutation,
 } from "@/client/@tanstack/react-query.gen";
 import type { ConfigInput } from "@/client/types.gen";
@@ -26,6 +45,181 @@ function stableStringify(value: unknown): string {
     v && typeof v === "object" && !Array.isArray(v)
       ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
       : v,
+  );
+}
+
+/** 配置文件管理: 新建/切换/删除/重置. 切换或重置后需要重置表单草稿, 否则显示的还是旧配置. */
+function ConfigManagerBar({ onConfigReplaced }: { onConfigReplaced: (next: ConfigInput) => void }) {
+  const listQ = useQuery(listConfigsOptions());
+  const queryClient = useQueryClient();
+  const { showSuccess, showError } = useToast();
+
+  const [selected, setSelected] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [confirm, setConfirm] = useState<null | "switch" | "delete" | "reset">(null);
+
+  const current = listQ.data?.current ?? "";
+  // 选中值默认跟随当前配置; 用 key 无效就比字符串
+  useEffect(() => {
+    setSelected((prev) => (prev && listQ.data?.configs.includes(prev) ? prev : current));
+  }, [listQ.data, current]);
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: listConfigsOptions().queryKey });
+  };
+
+  const switchMut = useMutation(switchConfigMutation());
+  const createMut = useMutation(createConfigMutation());
+  const deleteMut = useMutation(deleteConfigMutation());
+  const resetMut = useMutation(resetConfigMutation());
+
+  const busy = switchMut.isPending || createMut.isPending || deleteMut.isPending || resetMut.isPending;
+
+  const handleSwitch = async () => {
+    setConfirm(null);
+    try {
+      const res = await switchMut.mutateAsync({ path: {}, query: { name: selected } });
+      if (res.data) {
+        onConfigReplaced(res.data.config as ConfigInput);
+        if (res.data.errors.length) showError(res.data.errors.join("\n"));
+      }
+      invalidate();
+      showSuccess(`已切换到配置 ${selected}`);
+    } catch (error) {
+      showError(`切换失败: ${error}`);
+    }
+  };
+
+  const handleCreate = async () => {
+    const name = newName.trim();
+    setCreateOpen(false);
+    setNewName("");
+    try {
+      await createMut.mutateAsync({ path: {}, query: { name } });
+      invalidate();
+      showSuccess(`已创建配置 ${name}, 可在左侧下拉切换`);
+    } catch (error) {
+      showError(`创建失败: ${error}`);
+    }
+  };
+
+  const handleDelete = async () => {
+    setConfirm(null);
+    try {
+      await deleteMut.mutateAsync({ path: {}, query: { name: selected } });
+      invalidate();
+      showSuccess(`已删除配置 ${selected}`);
+    } catch (error) {
+      showError(`删除失败: ${error}`);
+    }
+  };
+
+  const handleReset = async () => {
+    setConfirm(null);
+    try {
+      const res = await resetMut.mutateAsync({ path: {} });
+      if (res.data) onConfigReplaced(res.data as ConfigInput);
+      invalidate();
+      showSuccess("已重置为默认配置");
+    } catch (error) {
+      showError(`重置失败: ${error}`);
+    }
+  };
+
+  const configAction = (action: "switch" | "delete" | "reset", title: string, text: string) => (
+    <Dialog open={confirm === action} onClose={() => setConfirm(null)} maxWidth="xs" fullWidth>
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent>
+        <DialogContentText>{text}</DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setConfirm(null)}>取消</Button>
+        <Button
+          variant="contained"
+          color={action === "delete" ? "error" : "primary"}
+          onClick={action === "switch" ? handleSwitch : action === "delete" ? handleDelete : handleReset}
+        >
+          确定
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  return (
+    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+      <Typography variant="h4">设置</Typography>
+      {current && <Chip size="small" label={`当前: ${current}`} variant="outlined" />}
+      <Box flexGrow={1} />
+      <TextField
+        select
+        size="small"
+        label="配置文件"
+        sx={{ minWidth: 160 }}
+        value={selected}
+        onChange={(e) => setSelected(e.target.value)}
+        disabled={busy}
+      >
+        {(listQ.data?.configs ?? []).map((name) => (
+          <MenuItem key={name} value={name}>
+            {name}
+            {name === current ? "（当前）" : ""}
+          </MenuItem>
+        ))}
+      </TextField>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={busy || !selected || selected === current}
+        onClick={() => setConfirm("switch")}
+      >
+        切换
+      </Button>
+      <Button size="small" variant="outlined" disabled={busy} onClick={() => setCreateOpen(true)}>
+        新建
+      </Button>
+      <Button
+        size="small"
+        variant="outlined"
+        color="error"
+        disabled={busy || !selected || selected === current}
+        onClick={() => setConfirm("delete")}
+      >
+        删除
+      </Button>
+      <Button size="small" variant="outlined" color="warning" disabled={busy} onClick={() => setConfirm("reset")}>
+        重置为默认
+      </Button>
+
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>新建配置文件</DialogTitle>
+        <DialogContent>
+          <DialogContentText>以默认配置创建一份新的配置文件, 之后可切换使用。</DialogContentText>
+          <TextField
+            autoFocus
+            fullWidth
+            size="small"
+            margin="dense"
+            label="配置名"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newName.trim()) handleCreate();
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateOpen(false)}>取消</Button>
+          <Button variant="contained" disabled={!newName.trim()} onClick={handleCreate}>
+            创建
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {configAction("switch", "切换配置", `切换到 ${selected} 后, 当前未保存的修改会丢失。`)}
+      {configAction("delete", "删除配置", `确定删除配置文件 ${selected}.json 吗？此操作不可恢复。`)}
+      {configAction("reset", "重置配置", "将把当前配置恢复为默认值, 所有修改都会丢失。")}
+    </Stack>
   );
 }
 
@@ -80,9 +274,13 @@ function SettingsComponent() {
     uiSchemaQ.isSuccess &&
     draft && (
       <div className="p-2">
-        <Typography variant="h4" gutterBottom>
-          设置
-        </Typography>
+        <ConfigManagerBar
+          onConfigReplaced={(next) => {
+            // 切换/重置后, 草稿和基线都换成新配置, 避免旧草稿被误保存到新配置
+            setDraft(next);
+            setBaseline(stableStringify(next));
+          }}
+        />
         <FormControl fullWidth sx={{ mb: 2 }}>
           <Form
             schema={schemaQ.data as RJSFSchema}
