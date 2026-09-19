@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from mdcx.base.file import save_success_list
 from mdcx.models.flags import Flags
+from mdcx.server.result_buffer import result_buffer
 from mdcx.signals import signal
 from mdcx.utils import executor
 
@@ -38,6 +39,29 @@ class ScrapeStatus(BaseModel):
     start_time: float = Field(description="本轮开始时间戳")
     elapsed: float = Field(description="已用时间 (秒)")
     remain: int = Field(description="剩余待刮削文件数量")
+
+
+class ScrapeResultEntry(BaseModel):
+    status: str = Field(description='"succ" 或 "fail"')
+    name: str = Field(description="列表显示名")
+    real_number: str = Field(description="识别出的番号")
+
+
+class ScrapeResults(BaseModel):
+    """刮削结果明细, 服务端留存的部分 (浏览器关闭期间的条目也在)."""
+
+    results: list[ScrapeResultEntry]
+    failed_details: list[str] = Field(description="失败原因明细, 与 results 中 fail 条目按时间对应")
+
+
+@router.get("/results", operation_id="getScrapeResults", summary="获取刮削结果明细")
+async def get_scrape_results() -> ScrapeResults:
+    """返回服务端留存的结果明细, 页面加载时用它补回错过的 WebSocket 推送."""
+    results, failed_details = result_buffer.snapshot()
+    return ScrapeResults(
+        results=[ScrapeResultEntry(status=r.status, name=r.name, real_number=r.real_number) for r in results],
+        failed_details=failed_details,
+    )
 
 
 @router.get("/status", operation_id="getScrapeStatus", summary="获取刮削状态")

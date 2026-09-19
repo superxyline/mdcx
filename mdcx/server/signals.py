@@ -6,6 +6,7 @@ from dataclasses import asdict
 from typing import Any, Literal
 
 from ..models.types import ShowData
+from .result_buffer import result_buffer
 from .ws.manager import websocket_manager
 from .ws.types import MessageType, WebSocketMessage
 
@@ -122,15 +123,18 @@ class ServerSignals:
         """发送列表名称显示"""
         try:
             data_dict = asdict(show_data)
+            result_buffer.add_result(status, str(show_data.show_name), real_number)
             self._broadcast_message(
                 "show_list_name", {"status": status, "show_data": data_dict, "real_number": real_number}
             )
         except Exception as e:
             print(f"Failed to serialize ShowData in show_list_name: {e}")
+            result_buffer.add_result(status, real_number or "(未知)", real_number)
             self._broadcast_message("show_list_name", {"status": status, "show_data": None, "real_number": real_number})
 
     def _emit_logs_failed_show(self, text: str):
         """发送失败日志显示"""
+        result_buffer.add_failed_detail(text)
         self._broadcast_message("logs_failed_show", text)
 
     # 以下方法保持与原始Qt信号系统相同的接口

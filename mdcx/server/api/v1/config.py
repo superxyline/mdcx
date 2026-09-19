@@ -4,9 +4,9 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from mdcx.config.computed import Computed
 from mdcx.config.manager import manager
 from mdcx.config.models import Config
-from mdcx.config.v1 import ConfigV1
 
 from .utils import check_path_access
 
@@ -22,8 +22,26 @@ async def get_config() -> Config:
 @router.put("/", operation_id="updateConfig", summary="更新配置")
 async def update_config(new_config: Config) -> Config:
     manager.config = new_config
+    # 重建 computed, 否则代理/超时等派生设置要重启容器才生效
+    manager.computed = Computed(manager.config)
     manager.save()
     return manager.config
+
+
+class ConfigListResponse(BaseModel):
+    current: str = Field(description="当前激活的配置文件名 (不含扩展名)")
+    configs: list[str] = Field(description="配置文件夹中的所有配置文件名 (不含扩展名)")
+
+
+@router.get("/list", operation_id="listConfigs", summary="列出配置文件")
+async def list_configs() -> ConfigListResponse:
+    """返回配置文件夹中的所有配置文件名与当前激活的配置名."""
+    names = []
+    for f in manager.list_configs():
+        stem = Path(f).stem
+        if stem not in names:
+            names.append(stem)
+    return ConfigListResponse(current=Path(manager.file).stem, configs=names)
 
 
 @router.delete("/", operation_id="deleteConfig", summary="删除配置文件")
@@ -45,12 +63,14 @@ async def reset_config() -> Config:
 
 @router.post("/create", operation_id="createConfig", summary="创建配置文件")
 async def create_config(name: Annotated[str, Query(description="配置文件名 (不含扩展名)")]):
-    """创建指定名称的配置文件"""
+    """创建指定名称的配置文件, 内容为默认配置"""
     p = Path(manager.data_folder) / f"{name}.json"
     check_path_access(p, manager.data_folder)
     if p.exists():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"名称为 {name} 的配置文件已存在.")
-    p.write_text(ConfigV1().format_ini(), encoding="UTF-8")
+    # 写合法 JSON 而不是 v1 ini: 后缀是 .json, load() 会按 JSON 解析,
+    # 写 ini 内容会静默回落到默认配置
+    p.write_text(Config().model_dump_json(indent=2), encoding="UTF-8")
 
 
 class ConfigSwitchResponse(BaseModel):

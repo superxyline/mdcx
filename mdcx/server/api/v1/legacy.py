@@ -12,6 +12,7 @@ from mdcx.core.scraper import start_new_scrape
 from mdcx.models.enums import FileMode
 from mdcx.models.flags import Flags
 from mdcx.server.config import SAFE_DIRS
+from mdcx.server.result_buffer import result_buffer
 from mdcx.tools.emby_actor_image import update_emby_actor_photo
 from mdcx.tools.emby_actor_info import show_emby_actor_list, update_emby_actor_info
 from mdcx.tools.subtitle import add_sub_for_all_video
@@ -28,6 +29,7 @@ async def start_scrape():
         errors = manager.load()
         if errors:
             raise HTTPException(status_code=500, detail=f"Configuration errors: {', '.join(errors)}")
+        result_buffer.clear()  # 新一轮开始, 结果明细重新累计
         start_new_scrape(FileMode.Default)
         return {"message": "Scraping started."}
     except Exception as e:
