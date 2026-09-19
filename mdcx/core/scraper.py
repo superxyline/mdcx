@@ -193,6 +193,14 @@ class Scraper:
         signal.show_log_text("================================================================================")
         signal.show_scrape_info(f"🎉 刮削完成 {task_count}/{task_count}")
 
+        # 完成通知与媒体库刷新 (可在设置中开关), 失败不影响刮削结果
+        try:
+            from mdcx.notify import notify_scrape_finished
+
+            await notify_scrape_finished(task_count, Flags.succ_count, Flags.fail_count, used_time)
+        except Exception as e:
+            signal.show_log_text(f" ⚠️ 完成通知/媒体库刷新出错: {e}")
+
         # auto run after scrape
         if EmbyAction.ACTOR_PHOTO_AUTO in manager.config.emby_on:
             await update_emby_actor_photo()

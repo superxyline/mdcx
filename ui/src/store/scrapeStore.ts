@@ -56,6 +56,8 @@ interface ScrapeState {
   success: number;
   failed: number;
   elapsed: number;
+  timedEnabled: boolean;
+  timedNextRun: number;
 
   /** 当前正在处理的文件路径 */
   currentFile: string;
@@ -121,6 +123,8 @@ export const useScrapeStore = create<ScrapeState>()(
     success: 0,
     failed: 0,
     elapsed: 0,
+    timedEnabled: false,
+    timedNextRun: 0,
     currentFile: "",
     statusText: "等待开始 ...",
     countText: "",
@@ -133,6 +137,8 @@ export const useScrapeStore = create<ScrapeState>()(
       const s = get();
       if (
         s.running === status.running &&
+        s.timedEnabled === (status.timed_enabled ?? false) &&
+        s.timedNextRun === (status.timed_next_run ?? 0) &&
         s.progress === status.progress &&
         s.total === status.total &&
         s.started === status.started &&
@@ -150,6 +156,8 @@ export const useScrapeStore = create<ScrapeState>()(
         success: status.success,
         failed: status.failed,
         elapsed: status.elapsed,
+        timedEnabled: status.timed_enabled ?? false,
+        timedNextRun: status.timed_next_run ?? 0,
       });
     },
 

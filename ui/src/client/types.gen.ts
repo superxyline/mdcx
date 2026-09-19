@@ -471,6 +471,11 @@ export type ConfigInput = {
      */
     user_id?: string;
     /**
+     * 刮削后刷新媒体库
+     * 每轮刮削完成后自动调用媒体服务器的刷新接口, 新片几秒内即可入库; 需先填好上面的地址和 API密钥
+     */
+    emby_refresh?: boolean;
+    /**
      * Emby功能开关
      */
     emby_on?: Array<EmbyAction>;
@@ -571,6 +576,31 @@ export type ConfigInput = {
      * Javbus
      */
     javbus?: string;
+    /**
+     * 完成通知方式
+     * 每轮刮削结束后推送结果统计到手机
+     */
+    notify_type?: 'none' | 'bark' | 'telegram';
+    /**
+     * Bark 服务器地址
+     * 自建 Bark 服务器时改成自己的地址, 默认官方即可
+     */
+    bark_url?: string;
+    /**
+     * Bark 推送 Key
+     * Bark App 首页复制的那串 Key
+     */
+    bark_key?: string;
+    /**
+     * Telegram Bot Token
+     * 找 @BotFather 创建机器人后获得; 国内直连不通, 请在代理与网络里开启代理
+     */
+    telegram_bot_token?: string;
+    /**
+     * Telegram Chat ID
+     * 给机器人发过消息后, 用 @userinfobot 查询自己的 ID
+     */
+    telegram_chat_id?: string;
     /**
      * 显示网页日志
      */
@@ -1055,6 +1085,11 @@ export type ConfigOutput = {
      */
     user_id?: string;
     /**
+     * 刮削后刷新媒体库
+     * 每轮刮削完成后自动调用媒体服务器的刷新接口, 新片几秒内即可入库; 需先填好上面的地址和 API密钥
+     */
+    emby_refresh?: boolean;
+    /**
      * Emby功能开关
      */
     emby_on?: Array<EmbyAction>;
@@ -1155,6 +1190,31 @@ export type ConfigOutput = {
      * Javbus
      */
     javbus?: string;
+    /**
+     * 完成通知方式
+     * 每轮刮削结束后推送结果统计到手机
+     */
+    notify_type?: 'none' | 'bark' | 'telegram';
+    /**
+     * Bark 服务器地址
+     * 自建 Bark 服务器时改成自己的地址, 默认官方即可
+     */
+    bark_url?: string;
+    /**
+     * Bark 推送 Key
+     * Bark App 首页复制的那串 Key
+     */
+    bark_key?: string;
+    /**
+     * Telegram Bot Token
+     * 找 @BotFather 创建机器人后获得; 国内直连不通, 请在代理与网络里开启代理
+     */
+    telegram_bot_token?: string;
+    /**
+     * Telegram Chat ID
+     * 给机器人发过消息后, 用 @userinfobot 查询自己的 ID
+     */
+    telegram_chat_id?: string;
     /**
      * 显示网页日志
      */
@@ -1446,6 +1506,44 @@ export type HttpValidationError = {
 };
 
 /**
+ * HealthIssue
+ */
+export type HealthIssue = {
+    /**
+     * Path
+     * 相关文件路径 (视频或 NFO)
+     */
+    path: string;
+    /**
+     * Missing
+     * 缺失的内容: nfo / poster / fanart / title / releasedate / actor / nfo_invalid
+     */
+    missing: Array<string>;
+};
+
+/**
+ * HealthReport
+ * 媒体库健康检查报告.
+ */
+export type HealthReport = {
+    /**
+     * Scanned
+     * 扫描到的影片数量 (按视频文件计)
+     */
+    scanned: number;
+    /**
+     * Ok
+     * 无问题的影片数量
+     */
+    ok: number;
+    /**
+     * Issues
+     * 有问题的影片列表 (最多 500 条)
+     */
+    issues: Array<HealthIssue>;
+};
+
+/**
  * KeepableFile
  */
 export type KeepableFile = 'poster' | 'thumb' | 'fanart' | 'extrafanart' | 'trailer' | 'nfo' | 'extrafanart_copy' | 'theme_videos';
@@ -1666,6 +1764,16 @@ export type ScrapeStatus = {
      * 剩余待刮削文件数量
      */
     remain: number;
+    /**
+     * Timed Enabled
+     * 定时自动刮削是否开启
+     */
+    timed_enabled?: boolean;
+    /**
+     * Timed Next Run
+     * 定时刮削的下次运行时间戳, 未开启时为 0
+     */
+    timed_next_run?: number;
 };
 
 /**
@@ -2459,6 +2567,22 @@ export type CheckMissingNumbersResponses = {
 };
 
 export type CheckMissingNumbersResponse = CheckMissingNumbersResponses[keyof CheckMissingNumbersResponses];
+
+export type GetHealthReportData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/tools/health-report';
+};
+
+export type GetHealthReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: HealthReport;
+};
+
+export type GetHealthReportResponse = GetHealthReportResponses[keyof GetHealthReportResponses];
 
 export type CleanFilesData = {
     body?: never;

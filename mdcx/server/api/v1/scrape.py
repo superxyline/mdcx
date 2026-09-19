@@ -23,6 +23,7 @@ from mdcx.models.flags import Flags
 from mdcx.server.api.v1.utils import check_path_access
 from mdcx.server.config import SAFE_DIRS
 from mdcx.server.result_buffer import ResultItem, result_buffer
+from mdcx.server.scheduler import timed_scraper
 from mdcx.signals import signal
 from mdcx.utils import executor
 
@@ -112,6 +113,10 @@ class ScrapeStatus(BaseModel):
     start_time: float = Field(description="本轮开始时间戳")
     elapsed: float = Field(description="已用时间 (秒)")
     remain: int = Field(description="剩余待刮削文件数量")
+    timed_enabled: bool = Field(default=False, description="定时自动刮削是否开启")
+    timed_next_run: float = Field(default=0, description="定时刮削的下次运行时间戳, 未开启时为 0")
+    timed_interval_seconds: float = Field(default=0, description="定时刮削的间隔秒数")
+    timed_last_run: float = Field(default=0, description="上次定时刮削触发的时间戳")
 
 
 class ScrapeResultEntry(BaseModel):
@@ -213,6 +218,7 @@ async def get_scrape_status() -> ScrapeStatus:
         start_time=Flags.start_time,
         elapsed=round(elapsed, 2),
         remain=len(Flags.remain_list),
+        **timed_scraper.status(),
     )
 
 

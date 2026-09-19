@@ -85,6 +85,7 @@ const SECTIONS: SectionDef[] = [
       "emby_url",
       "api_key",
       "user_id",
+      "emby_refresh",
       "emby_on",
       "use_database",
       "info_database_path",
@@ -99,6 +100,13 @@ const SECTIONS: SectionDef[] = [
     group: "常用设置",
     desc: "刮削源无法直连时配置代理, 以及请求超时/重试",
     fields: ["use_proxy", "proxy", "timeout", "retry", "theporndb_api_token", "javdb", "javbus"],
+  },
+  {
+    key: "notify",
+    label: "完成通知",
+    group: "常用设置",
+    desc: "每轮刮削结束后把成功/失败统计推送到手机 (Bark 或 Telegram)",
+    fields: ["notify_type", "bark_url", "bark_key", "telegram_bot_token", "telegram_chat_id"],
   },
   {
     key: "website",

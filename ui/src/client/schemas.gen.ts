@@ -70,7 +70,7 @@ export const Config_InputSchema = {
             default: '/media',
             uiSchema: {
                 customProps: {
-                    initialPath: 'C:/Users/13017',
+                    initialPath: 'E:/codex/mdcx/media',
                     multiple: false,
                     type: 'directory'
                 },
@@ -703,6 +703,12 @@ export const Config_InputSchema = {
             description: '媒体服务器的用户 ID, 可在 控制台→设备 或用户管理页的链接里找到',
             default: ''
         },
+        emby_refresh: {
+            type: 'boolean',
+            title: '刮削后刷新媒体库',
+            description: '每轮刮削完成后自动调用媒体服务器的刷新接口, 新片几秒内即可入库; 需先填好上面的地址和 API密钥',
+            default: false
+        },
         emby_on: {
             items: {
                 '$ref': '#/components/schemas/EmbyAction'
@@ -834,6 +840,37 @@ export const Config_InputSchema = {
         javbus: {
             type: 'string',
             title: 'Javbus',
+            default: ''
+        },
+        notify_type: {
+            type: 'string',
+            enum: ['none', 'bark', 'telegram'],
+            title: '完成通知方式',
+            description: '每轮刮削结束后推送结果统计到手机',
+            default: 'none'
+        },
+        bark_url: {
+            type: 'string',
+            title: 'Bark 服务器地址',
+            description: '自建 Bark 服务器时改成自己的地址, 默认官方即可',
+            default: 'https://api.day.app'
+        },
+        bark_key: {
+            type: 'string',
+            title: 'Bark 推送 Key',
+            description: 'Bark App 首页复制的那串 Key',
+            default: ''
+        },
+        telegram_bot_token: {
+            type: 'string',
+            title: 'Telegram Bot Token',
+            description: '找 @BotFather 创建机器人后获得; 国内直连不通, 请在代理与网络里开启代理',
+            default: ''
+        },
+        telegram_chat_id: {
+            type: 'string',
+            title: 'Telegram Chat ID',
+            description: '给机器人发过消息后, 用 @userinfobot 查询自己的 ID',
             default: ''
         },
         show_web_log: {
@@ -931,7 +968,7 @@ export const Config_OutputSchema = {
             default: '/media',
             uiSchema: {
                 customProps: {
-                    initialPath: 'C:/Users/13017',
+                    initialPath: 'E:/codex/mdcx/media',
                     multiple: false,
                     type: 'directory'
                 },
@@ -1564,6 +1601,12 @@ export const Config_OutputSchema = {
             description: '媒体服务器的用户 ID, 可在 控制台→设备 或用户管理页的链接里找到',
             default: ''
         },
+        emby_refresh: {
+            type: 'boolean',
+            title: '刮削后刷新媒体库',
+            description: '每轮刮削完成后自动调用媒体服务器的刷新接口, 新片几秒内即可入库; 需先填好上面的地址和 API密钥',
+            default: false
+        },
         emby_on: {
             items: {
                 '$ref': '#/components/schemas/EmbyAction'
@@ -1695,6 +1738,37 @@ export const Config_OutputSchema = {
         javbus: {
             type: 'string',
             title: 'Javbus',
+            default: ''
+        },
+        notify_type: {
+            type: 'string',
+            enum: ['none', 'bark', 'telegram'],
+            title: '完成通知方式',
+            description: '每轮刮削结束后推送结果统计到手机',
+            default: 'none'
+        },
+        bark_url: {
+            type: 'string',
+            title: 'Bark 服务器地址',
+            description: '自建 Bark 服务器时改成自己的地址, 默认官方即可',
+            default: 'https://api.day.app'
+        },
+        bark_key: {
+            type: 'string',
+            title: 'Bark 推送 Key',
+            description: 'Bark App 首页复制的那串 Key',
+            default: ''
+        },
+        telegram_bot_token: {
+            type: 'string',
+            title: 'Telegram Bot Token',
+            description: '找 @BotFather 创建机器人后获得; 国内直连不通, 请在代理与网络里开启代理',
+            default: ''
+        },
+        telegram_chat_id: {
+            type: 'string',
+            title: 'Telegram Chat ID',
+            description: '给机器人发过消息后, 用 @userinfobot 查询自己的 ID',
             default: ''
         },
         show_web_log: {
@@ -2094,6 +2168,54 @@ export const HTTPValidationErrorSchema = {
     title: 'HTTPValidationError'
 } as const;
 
+export const HealthIssueSchema = {
+    properties: {
+        path: {
+            type: 'string',
+            title: 'Path',
+            description: '相关文件路径 (视频或 NFO)'
+        },
+        missing: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Missing',
+            description: '缺失的内容: nfo / poster / fanart / title / releasedate / actor / nfo_invalid'
+        }
+    },
+    type: 'object',
+    required: ['path', 'missing'],
+    title: 'HealthIssue'
+} as const;
+
+export const HealthReportSchema = {
+    properties: {
+        scanned: {
+            type: 'integer',
+            title: 'Scanned',
+            description: '扫描到的影片数量 (按视频文件计)'
+        },
+        ok: {
+            type: 'integer',
+            title: 'Ok',
+            description: '无问题的影片数量'
+        },
+        issues: {
+            items: {
+                '$ref': '#/components/schemas/HealthIssue'
+            },
+            type: 'array',
+            title: 'Issues',
+            description: '有问题的影片列表 (最多 500 条)'
+        }
+    },
+    type: 'object',
+    required: ['scanned', 'ok', 'issues'],
+    title: 'HealthReport',
+    description: '媒体库健康检查报告.'
+} as const;
+
 export const KeepableFileSchema = {
     type: 'string',
     enum: ['poster', 'thumb', 'fanart', 'extrafanart', 'trailer', 'nfo', 'extrafanart_copy', 'theme_videos'],
@@ -2349,6 +2471,18 @@ export const ScrapeStatusSchema = {
             type: 'integer',
             title: 'Remain',
             description: '剩余待刮削文件数量'
+        },
+        timed_enabled: {
+            type: 'boolean',
+            title: 'Timed Enabled',
+            description: '定时自动刮削是否开启',
+            default: false
+        },
+        timed_next_run: {
+            type: 'number',
+            title: 'Timed Next Run',
+            description: '定时刮削的下次运行时间戳, 未开启时为 0',
+            default: 0
         }
     },
     type: 'object',

@@ -44,7 +44,11 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link as RouterLink } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { backfillHistoryMutation, getCurrentConfigOptions } from "@/client/@tanstack/react-query.gen";
+import {
+  backfillHistoryMutation,
+  getCurrentConfigOptions,
+  retryFailedListMutation,
+} from "@/client/@tanstack/react-query.gen";
 import { getScrapeStatus, startScrape, stopScrape } from "@/client/sdk.gen";
 import { PosterThumb, ResultDetailDialog } from "@/components/ResultDetail";
 import { WizardDialog } from "@/components/WizardDialog";
@@ -98,6 +102,8 @@ function ScrapePage() {
   const countText = useScrapeStore((s) => s.countText);
   const results = useScrapeStore((s) => s.results);
   const failedDetails = useScrapeStore((s) => s.failedDetails);
+  const timedEnabled = useScrapeStore((s) => s.timedEnabled);
+  const timedNextRun = useScrapeStore((s) => s.timedNextRun);
   const { showSuccess, showError } = useToast();
 
   const [mediaPath, setMediaPath] = useState("");
@@ -109,6 +115,8 @@ function ScrapePage() {
 
   // 从媒体库导入历史刮削记录 (NFO 扫描回填)
   const backfillMut = useMutation(backfillHistoryMutation());
+  // 失败列表一键重试 (后端把失败文件作为待刮清单重新提交)
+  const retryMut = useMutation(retryFailedListMutation());
 
   // 配置: 既用于展示刮削目录, 也用于判断是否弹出首次使用向导
   const configQ = useQuery(getCurrentConfigOptions());
@@ -158,6 +166,16 @@ function ScrapePage() {
       setBusy(false);
     }
   }, []);
+
+  const handleRetryFailed = useCallback(() => {
+    retryMut.mutate(undefined, {
+      onSuccess: (res) => {
+        showSuccess(res.data?.message ?? "已提交重新刮削");
+        useScrapeStore.getState().setRunning(true);
+      },
+      onError: (err) => showError(`重试失败: ${err}`),
+    });
+  }, [retryMut, showSuccess, showError]);
 
   const handleStop = useCallback(async () => {
     setConfirmStop(false);
@@ -242,6 +260,11 @@ function ScrapePage() {
               {statusText}
               {countText ? ` · ${countText}` : ""}
             </Typography>
+            {timedEnabled && timedNextRun > 0 && !running && (
+              <Typography variant="body2" color="text.secondary">
+                ⏰ 定时刮削已开启 · 下次 {formatTime(timedNextRun)}
+              </Typography>
+            )}
             {currentFile ? (
               <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
                 {currentFile}
@@ -258,6 +281,18 @@ function ScrapePage() {
               <Tab label={`成功 (${successItems.length})`} />
               <Tab label={`失败 (${failedItems.length})`} />
             </Tabs>
+            {tab === 1 && (
+              <Button
+                size="small"
+                variant="outlined"
+                color="warning"
+                disabled={running || retryMut.isPending || failedItems.length === 0}
+                onClick={handleRetryFailed}
+                sx={{ mr: 1 }}
+              >
+                {retryMut.isPending ? "提交中..." : `重试失败 (${failedItems.length})`}
+              </Button>
+            )}
             <Button
               size="small"
               variant="outlined"

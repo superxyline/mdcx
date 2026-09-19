@@ -600,6 +600,11 @@ class Config(BaseModel):
         title="用户ID",
         description="媒体服务器的用户 ID, 可在 控制台→设备 或用户管理页的链接里找到",
     )
+    emby_refresh: bool = Field(
+        default=False,
+        title="刮削后刷新媒体库",
+        description="每轮刮削完成后自动调用媒体服务器的刷新接口, 新片几秒内即可入库; 需先填好上面的地址和 API密钥",
+    )
     emby_on: list[EmbyAction] = Field(
         default_factory=lambda: [
             EmbyAction.ACTOR_INFO_ZH_CN,
@@ -675,6 +680,34 @@ class Config(BaseModel):
     theporndb_api_token: str = Field(default="", title="Theporndb API令牌")
     javdb: str = Field(default="", title="Javdb")
     javbus: str = Field(default="", title="Javbus")
+    # endregion
+
+    # region: Notify Settings
+    notify_type: Literal["none", "bark", "telegram"] = Field(
+        default="none",
+        title="完成通知方式",
+        description="每轮刮削结束后推送结果统计到手机",
+    )
+    bark_url: str = Field(
+        default="https://api.day.app",
+        title="Bark 服务器地址",
+        description="自建 Bark 服务器时改成自己的地址, 默认官方即可",
+    )
+    bark_key: str = Field(
+        default="",
+        title="Bark 推送 Key",
+        description="Bark App 首页复制的那串 Key",
+    )
+    telegram_bot_token: str = Field(
+        default="",
+        title="Telegram Bot Token",
+        description="找 @BotFather 创建机器人后获得; 国内直连不通, 请在代理与网络里开启代理",
+    )
+    telegram_chat_id: str = Field(
+        default="",
+        title="Telegram Chat ID",
+        description="给机器人发过消息后, 用 @userinfobot 查询自己的 ID",
+    )
     # endregion
 
     # region: Log Settings

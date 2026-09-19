@@ -36,6 +36,7 @@ import {
   completeActorsMutation,
   createSymlinkMutation,
   getFailedListOptions,
+  getHealthReportOptions,
   getSiteUrlsOptions,
   getSuccessListOptions,
   listActorsMutation,
@@ -50,7 +51,7 @@ import {
   setSiteUrlMutation,
   startScrapeMutation,
 } from "../client/@tanstack/react-query.gen";
-import type { Website } from "../client/types.gen";
+import type { HealthReport, Website } from "../client/types.gen";
 import { PosterCutter } from "../components/PosterCutter";
 import { useToast } from "../contexts/ToastProvider";
 
@@ -559,6 +560,9 @@ function ToolComponent() {
           </CardContent>
         </Card>
 
+        {/* 健康检查 */}
+        <HealthCheckCard />
+
         {/* 剧照与主题视频 */}
         <Card>
           <CardContent>
@@ -836,5 +840,86 @@ function ToolComponent() {
         </DialogActions>
       </Dialog>
     </Box>
+  );
+}
+
+const MISSING_LABELS: Record<string, string> = {
+  nfo: "未刮削 (没有 NFO)",
+  nfo_invalid: "NFO 无法解析",
+  poster: "缺封面",
+  fanart: "缺剧照",
+  title: "缺标题",
+  releasedate: "缺发行日期",
+  actor: "缺演员",
+};
+
+/** 媒体库健康检查: 扫描出未刮削/缺封面/字段缺失的影片, 便于逐个修复. */
+function HealthCheckCard() {
+  const { showSuccess, showError } = useToast();
+  const [report, setReport] = useState<HealthReport | null>(null);
+  const healthQ = useQuery({ ...getHealthReportOptions(), enabled: false, queryKey: ["healthReport"] });
+
+  const runScan = async () => {
+    try {
+      const res = await healthQ.refetch();
+      if (res.data) {
+        setReport(res.data);
+        showSuccess(`扫描完成: ${res.data.scanned} 部影片, ${res.data.issues.length} 个问题`);
+      }
+    } catch (err) {
+      showError(`扫描失败: ${err}`);
+    }
+  };
+
+  const groups = Object.entries(
+    (report?.issues ?? []).reduce<Record<string, string[]>>((acc, issue) => {
+      const key = issue.missing[0] ?? "other";
+      const list = acc[key] ?? [];
+      list.push(issue.path);
+      acc[key] = list;
+      return acc;
+    }, {}),
+  ).sort((a, b) => b[1].length - a[1].length);
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          健康检查
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          扫描媒体库, 找出未刮削、缺封面、NFO 字段缺失的影片。发现封面问题后可到「封面裁剪」修复。
+        </Typography>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 1 }}>
+          <Button variant="outlined" onClick={runScan} disabled={healthQ.isFetching}>
+            {healthQ.isFetching ? "扫描中..." : "开始扫描"}
+          </Button>
+          {report && (
+            <Chip
+              size="small"
+              color={report.issues.length ? "warning" : "success"}
+              label={`共 ${report.scanned} 部 · 正常 ${report.ok} · 问题 ${report.issues.length}`}
+            />
+          )}
+        </Box>
+        {groups.map(([kind, paths]) => (
+          <Box key={kind} sx={{ mb: 1.5 }}>
+            <Typography variant="subtitle2">
+              {MISSING_LABELS[kind] ?? kind} ({paths.length})
+            </Typography>
+            <List dense disablePadding sx={{ maxHeight: 200, overflow: "auto" }}>
+              {paths.map((path) => (
+                <ListItem key={path} disableGutters>
+                  <ListItemText
+                    primary={path}
+                    slotProps={{ primary: { sx: { wordBreak: "break-all", fontSize: 13 } } }}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

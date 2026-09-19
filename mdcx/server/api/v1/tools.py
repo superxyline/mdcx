@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -121,6 +122,76 @@ async def check_missing() -> dict[str, str]:
     _ensure_idle()
     executor.submit(check_missing_number(True))
     return {"message": "已开始检查缺失番号, 结果见日志页."}
+
+
+class HealthIssue(BaseModel):
+    path: str = Field(description="相关文件路径 (视频或 NFO)")
+    missing: list[str] = Field(description="缺失的内容: nfo / poster / fanart / title / releasedate / actor / nfo_invalid")
+
+
+class HealthReport(BaseModel):
+    """媒体库健康检查报告."""
+
+    scanned: int = Field(description="扫描到的影片数量 (按视频文件计)")
+    ok: int = Field(description="无问题的影片数量")
+    issues: list[HealthIssue] = Field(description="有问题的影片列表 (最多 500 条)")
+
+
+@router.get("/health-report", operation_id="getHealthReport", summary="媒体库健康检查")
+async def health_report() -> HealthReport:
+    """扫描媒体库, 找出未刮削、缺封面、NFO 字段缺失的影片.
+
+    同步扫描, 大库可能需要几秒; 刮削进行中时拒绝执行.
+    """
+    _ensure_idle()
+    movie_path = Path(manager.config.media_path) if manager.config.media_path else manager.data_folder
+    try:
+        check_path_access(movie_path, *SAFE_DIRS)
+    except HTTPException:
+        raise HTTPException(status_code=400, detail=f"媒体路径不可访问: {movie_path}")
+    video_exts = {ext.lower() for ext in manager.config.media_type}
+
+    def _scan() -> HealthReport:
+        issues: list[HealthIssue] = []
+        scanned = 0
+        ok = 0
+        for video in sorted(movie_path.rglob("*")):
+            if not video.is_file() or video.suffix.lower() not in video_exts:
+                continue
+            scanned += 1
+            missing: list[str] = []
+            nfo = next((p for p in video.parent.glob("*.nfo") if p.is_file()), None)
+            if nfo is None:
+                issues.append(HealthIssue(path=str(video), missing=["nfo"]))
+                continue
+            missing.extend(_nfo_health_issues(nfo))
+            if next((p for p in video.parent.iterdir() if p.name.lower() == "poster.jpg"), None) is None:
+                missing.append("poster")
+            if next((p for p in video.parent.iterdir() if p.name.lower() == "fanart.jpg"), None) is None:
+                missing.append("fanart")
+            if missing:
+                issues.append(HealthIssue(path=str(nfo), missing=missing))
+            else:
+                ok += 1
+        return HealthReport(scanned=scanned, ok=ok, issues=issues[:500])
+
+    return await asyncio.to_thread(_scan)
+
+
+def _nfo_health_issues(nfo: Path) -> list[str]:
+    """NFO 关键字段缺失检查; 解析失败视为整体缺失."""
+    try:
+        root = ET.parse(nfo).getroot()
+    except Exception:
+        return ["nfo_invalid"]
+    missing = []
+    for tag in ("title", "releasedate"):
+        el = root.find(tag)
+        if el is None or not (el.text or "").strip():
+            missing.append(tag)
+    if root.find("actor") is None:
+        missing.append("actor")
+    return missing
 
 
 @router.post("/clean-files", operation_id="cleanFiles", summary="检查并清理文件")

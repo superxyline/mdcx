@@ -26,7 +26,30 @@
 5. **顺手修了存量 bug**：`utils/path.py` 的 `is_descendant` 在 Windows 跨盘符时
    `os.path.commonpath` 抛 ValueError → 现在返回 False。test_path 那个一直失败的用例已转绿。
 
-遗留（本轮没做）：定时扫描、刮削完通知 Emby 刷新、刮削前预览确认、失败条目一键重刮。
+遗留（本轮没做）：刮削前预览确认、媒体库浏览页、硬链接整理模式、访问密码引导。
+
+---
+
+## 〇-3、2026-09-19 晚 3：刮削完成链路五件套（本轮）
+
+1. **失败一键重试**：后端 retryFailedList 本来就有, 首页失败页签加了「重试失败」按钮
+   (把失败文件作为待刮清单重新提交)。注意 Flags.failed_list 只存本轮(内存), 重启后为空。
+2. **完成通知**：`mdcx/notify.py`。配置新增 通知设置 区(设置页常用组):
+   notify_type(bark/telegram/none) + bark_url/bark_key + telegram_bot_token/chat_id。
+   刮削完成(core/scraper.py 钩子)推送统计, Telegram 走配置的代理。失败只记日志不影响刮削。
+3. **Emby/Jellyfin 刷新**：配置 emby_refresh(媒体服务器分区)开关, 完成后 POST
+   {emby_url}/emby/Library/Refresh?api_key=..., 局域网直连不走代理。
+4. **定时自动刮削**：`mdcx/server/scheduler.py`, lifespan 启动 asyncio 任务每 30s tick:
+   switch_on 含 timed_scrape + 后台空闲 + 距上次运行超过 timed_interval → 自动开刮。
+   上次运行时间持久化在 /data/timed_scrape.json; 首次启动只记基准不触发。
+   状态随 /scrape/status 返回(timed_enabled/timed_next_run/...), 首页空闲时显示下次运行时间。
+   开关和间隔在 设置→杂项(switch_on/timed_interval)。改配置立即生效(每次 tick 读当前配置)。
+5. **健康检查**：GET /api/v1/tools/health-report, 同步扫描媒体路径, 按 NFO 找出
+   未刮削(视频无NFO)/缺封面/缺字段(title/releasedate/actor)/NFO解析失败, 各类最多500条。
+   工具箱新增「健康检查」卡片(开始扫描 + 分类结果)。
+
+曾踩坑：status() 返回键名 enabled 与 ScrapeStatus 字段 timed_enabled 不一致,
+pydantic 静默丢弃导致状态永远 False —— ** 解包时键名必须与模型字段完全一致。
 
 ---
 

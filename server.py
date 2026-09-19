@@ -51,7 +51,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from mdcx.server.ask import ask_manager
 
     ask_manager.bind_loop(asyncio.get_running_loop())
+
+    # 定时自动刮削调度器
+    from mdcx.server.scheduler import timed_scraper
+
+    timed_scraper.start()
     yield
+    await timed_scraper.stop()
 
 
 def create_app() -> FastAPI:
