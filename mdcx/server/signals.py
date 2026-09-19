@@ -11,6 +11,31 @@ from .ws.manager import websocket_manager
 from .ws.types import MessageType, WebSocketMessage
 
 
+def _result_detail(show_data: ShowData) -> dict | None:
+    """提取结果条目的预览元数据, 存入结果缓冲供前端点击查看.
+
+    任何字段缺失都不应影响刮削主流程, 因此整体兜底返回 None.
+    """
+    try:
+        poster = show_data.other.poster_path
+        fanart = show_data.other.fanart_path
+        file_path = show_data.file_info.file_show_path or show_data.file_info.file_path
+        return {
+            "title": show_data.data.title or "",
+            "actors": ",".join(show_data.data.actors or []),
+            "release": show_data.data.release or "",
+            "year": show_data.data.year or "",
+            "number": show_data.data.number or show_data.file_info.number or "",
+            "mosaic": show_data.data.mosaic or "",
+            "poster_path": str(poster or ""),
+            "fanart_path": str(fanart or ""),
+            "file_path": str(file_path or ""),
+            "folder_path": str(show_data.file_info.folder_path or ""),
+        }
+    except Exception:
+        return None
+
+
 class Signal[*T = *tuple[()]]:
     def __init__(self, fn: Callable[[*T], None] | None = None):
         self.fn = fn
@@ -123,7 +148,7 @@ class ServerSignals:
         """发送列表名称显示"""
         try:
             data_dict = asdict(show_data)
-            result_buffer.add_result(status, str(show_data.show_name), real_number)
+            result_buffer.add_result(status, str(show_data.show_name), real_number, detail=_result_detail(show_data))
             self._broadcast_message(
                 "show_list_name", {"status": status, "show_data": data_dict, "real_number": real_number}
             )

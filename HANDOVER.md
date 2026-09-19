@@ -1,11 +1,34 @@
 # 项目交接文档
 
-> 最后更新：2026-09-19（晚：易用性改造）
+> 最后更新：2026-09-19（晚 2：结果列表持久化与预览）
 > 用途：供新对话快速了解项目全貌，接续开发
 
 ---
 
-## 〇、2026-09-19 晚：易用性改造（本轮）
+## 〇-2、2026-09-19 晚 2：刮削结果列表持久化 + 点击预览（本轮）
+
+背景：结果列表原本只在内存(环形缓冲)，每轮刮削清空、容器重启全丢，用户看到的永远是空的。
+
+1. **结果持久化**：`result_buffer.py` 重写。每条成功/失败记录追加写入用户数据目录的
+   `scrape_history.jsonl`（容器内 /data，已加 .gitignore），启动时自动加载，跨轮次跨重启持续累积。
+   每轮刮削**不再清空**列表（legacy.py 的 clear 调用已删），统计数字仍按轮计算。
+   失败原因明细(failed_details)同样持久化。
+2. **记录带预览元数据**：`signals._result_detail()` 从 ShowData 提取 标题/演员/发行日期/番号/
+   马赛克/海报路径/fanart路径/文件路径/目录，随记录一起存。前端实时推送和 REST 都带 detail。
+3. **历史导入**：`POST /api/v1/scrape/backfill`（首页右上「导入历史」按钮）。扫描成功输出目录
+   (相对路径按 extend.py 同款规则解析)下所有 NFO，解析 title/num/actor/releasedate 生成成功记录，
+   按 nfo_path/file_path 去重，时间戳用 NFO mtime。老用户升级后点一下即可找回全部历史成果。
+4. **前端预览**：`ResultDetail.tsx`。列表项带封面缩略图(`PosterThumb`，blob URL 带 API Key 认证)，
+   点击弹出详情(封面大图+元数据+文件路径)；详情里「在工具箱中裁剪封面」跳 `/tool?cutterPath=...`
+   (tool.tsx 加了 validateSearch，PosterCutter 加 initialPath 自动载入)。失败页底部展示失败原因明细。
+5. **顺手修了存量 bug**：`utils/path.py` 的 `is_descendant` 在 Windows 跨盘符时
+   `os.path.commonpath` 抛 ValueError → 现在返回 False。test_path 那个一直失败的用例已转绿。
+
+遗留（本轮没做）：定时扫描、刮削完通知 Emby 刷新、刮削前预览确认、失败条目一键重刮。
+
+---
+
+## 〇、2026-09-19 晚：易用性改造（上一轮）
 
 1. **侧边栏中文化**：`Layout.tsx` 菜单改为 首页/工具箱/网络/日志/设置/关于，顶栏改「MDCx 影片元数据刮削」。
 2. **设置页分区导航**：`settings.tsx` 重构为左侧分区列表（常用设置 3 区 + 高级选项 9 区），一次只渲染当前分区的字段（其余字段以 `ui:widget: hidden` 隐藏但保留值，跨分区修改不丢）。分区定义在 `SECTIONS` 常量；漏归类的字段自动落入「杂项」。`wizard_done` 字段已列入 `HIDDEN_FIELDS`。

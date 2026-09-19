@@ -175,6 +175,7 @@ test.json
 test.v2.json
 MDCx.config
 userdata/
+scrape_history.jsonl
 Log/
 
 # dev files

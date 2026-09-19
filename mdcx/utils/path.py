@@ -24,7 +24,11 @@ def is_descendant(p: str | Path, parent: str | Path) -> bool:
     parent = os.path.realpath(parent, strict=os.path.ALLOW_MISSING)
     # parent = /foo/bar, p = /foo/barbar 使得简单的前缀判断失效
     # os.path.commonpath 可以处理这种情况
-    return os.path.commonpath([p, parent]) == str(parent)
+    try:
+        return os.path.commonpath([p, parent]) == str(parent)
+    except ValueError:
+        # Windows 下两个路径在不同盘符 (如 C:\ 与 D:\) 时没有共同祖先
+        return False
 
 
 def is_any_descendant(p: str | Path, *parents: str | Path) -> bool:

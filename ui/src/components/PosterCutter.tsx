@@ -51,9 +51,11 @@ function calcBox(displayW: number, displayH: number, ratio: number) {
 interface PosterCutterProps {
   open: boolean;
   onClose: () => void;
+  /** 外部带入的图片路径 (如从刮削结果详情跳转), 打开时自动载入 */
+  initialPath?: string;
 }
 
-export function PosterCutter({ open, onClose }: PosterCutterProps) {
+export function PosterCutter({ open, onClose, initialPath }: PosterCutterProps) {
   const { showSuccess, showError } = useToast();
 
   const [path, setPath] = useState("");
@@ -81,8 +83,8 @@ export function PosterCutter({ open, onClose }: PosterCutterProps) {
     setPath("");
   }, [open]);
 
-  const loadImage = async () => {
-    const target = path.trim();
+  const loadImage = async (targetArg?: string) => {
+    const target = (targetArg ?? path).trim();
     if (!target) {
       showError("请先输入图片路径");
       return;
@@ -130,6 +132,16 @@ export function PosterCutter({ open, onClose }: PosterCutterProps) {
     const size = calcBox(w, h, ratio);
     setBox({ x: Math.max(0, (w - size.w) / 2), y: Math.max(0, (h - size.h) / 2), ...size });
   };
+
+  // 外部带入图片路径时自动载入; ref 防止依赖变化导致重复加载
+  const loadedInitialRef = useRef<string | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadImage 每次渲染重建, 只需随 open/initialPath 触发
+  useEffect(() => {
+    if (!open || !initialPath || loadedInitialRef.current === initialPath) return;
+    loadedInitialRef.current = initialPath;
+    setPath(initialPath);
+    void loadImage(initialPath);
+  }, [open, initialPath]);
 
   // 调整比例时保持左上角不动, 仅重算尺寸并夹回边界内
   useEffect(() => {

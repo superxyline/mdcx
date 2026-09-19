@@ -28,6 +28,25 @@ export const AskAnswerSchema = {
     title: 'AskAnswer'
 } as const;
 
+export const BackfillResponseSchema = {
+    properties: {
+        scanned: {
+            type: 'integer',
+            title: 'Scanned',
+            description: '扫描到的 NFO 文件数量'
+        },
+        imported: {
+            type: 'integer',
+            title: 'Imported',
+            description: '新导入的记录数量 (已存在的自动跳过)'
+        }
+    },
+    type: 'object',
+    required: ['scanned', 'imported'],
+    title: 'BackfillResponse',
+    description: '历史导入结果.'
+} as const;
+
 export const CDCharSchema = {
     type: 'string',
     enum: ['letter', 'endc', 'digital', 'middle_number', 'underline', 'space', 'point'],
@@ -2224,6 +2243,25 @@ export const ScrapeResultEntrySchema = {
             type: 'string',
             title: 'Real Number',
             description: '识别出的番号'
+        },
+        ts: {
+            type: 'number',
+            title: 'Ts',
+            description: '记录时间戳; 历史导入的条目为 NFO 修改时间',
+            default: 0
+        },
+        detail: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Detail',
+            description: '预览元数据 (标题/演员/封面路径等), 可能为空'
         }
     },
     type: 'object',
@@ -2252,7 +2290,7 @@ export const ScrapeResultsSchema = {
     type: 'object',
     required: ['results', 'failed_details'],
     title: 'ScrapeResults',
-    description: '刮削结果明细, 服务端留存的部分 (浏览器关闭期间的条目也在).'
+    description: '刮削结果明细, 服务端留存的部分 (跨重启持久化, 持续累积).'
 } as const;
 
 export const ScrapeStatusSchema = {

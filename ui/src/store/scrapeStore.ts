@@ -15,6 +15,25 @@ import { getScrapeResults } from "@/client/sdk.gen";
 import type { ScrapeStatus } from "@/client/types.gen";
 import type { LogEntry, WebSocketMessage } from "@/hooks/useWebSocket";
 
+export interface ScrapeResultDetail {
+  title?: string;
+  actors?: string;
+  release?: string;
+  year?: string;
+  number?: string;
+  mosaic?: string;
+  poster_path?: string;
+  fanart_path?: string;
+  file_path?: string;
+  folder_path?: string;
+  nfo_path?: string;
+}
+
+export interface FailedDetail {
+  id: string;
+  text: string;
+}
+
 export interface ScrapeListItem {
   /** 唯一键, 用于列表渲染 */
   id: string;
@@ -23,6 +42,10 @@ export interface ScrapeListItem {
   status: "succ" | "fail";
   /** 识别出的番号 */
   realNumber: string;
+  /** 记录时间戳 (秒); 历史导入的条目为 NFO 修改时间 */
+  ts?: number;
+  /** 预览元数据, 点击列表项时展示 */
+  detail?: ScrapeResultDetail;
 }
 
 interface ScrapeState {
@@ -42,7 +65,7 @@ interface ScrapeState {
   countText: string;
 
   results: ScrapeListItem[];
-  failedDetails: string[];
+  failedDetails: FailedDetail[];
 
   applyStatus: (status: ScrapeStatus) => void;
   setProgress: (progress: number) => void;
@@ -62,6 +85,32 @@ const nextId = () => {
   seq += 1;
   return `r${seq}`;
 };
+
+/** 从 WebSocket 推送的 show_data (后端 asdict 结果) 里挑出预览需要的字段 */
+function detailFromShowData(sd: unknown): ScrapeResultDetail | undefined {
+  if (!sd || typeof sd !== "object") return undefined;
+  const d = sd as Record<string, Record<string, unknown> | undefined>;
+  const data = d.data ?? {};
+  const info = d.file_info ?? {};
+  const other = d.other ?? {};
+  const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+  const filePath = str(info.file_show_path) ?? str(info.file_path);
+  const actors = Array.isArray(data.actors) ? data.actors.filter(Boolean).join(",") : undefined;
+  const detail: ScrapeResultDetail = {
+    title: str(data.title),
+    actors,
+    release: str(data.release),
+    year: str(data.year),
+    number: str(data.number) ?? str(info.number),
+    mosaic: str(data.mosaic),
+    poster_path: str(other.poster_path),
+    fanart_path: str(other.fanart_path),
+    file_path: filePath,
+    folder_path: str(info.folder_path),
+  };
+  // 全空就不占用条目空间
+  return Object.values(detail).some(Boolean) ? detail : undefined;
+}
 
 export const useScrapeStore = create<ScrapeState>()(
   subscribeWithSelector((set, get) => ({
@@ -135,6 +184,8 @@ export const useScrapeStore = create<ScrapeState>()(
             name: showData?.show_name ?? payload.real_number ?? "(未知)",
             status: payload.status === "succ" ? "succ" : "fail",
             realNumber: payload.real_number ?? "",
+            ts: Date.now() / 1000,
+            detail: detailFromShowData(showData),
           };
           set((state) => {
             const results = [...state.results, item];
@@ -146,7 +197,7 @@ export const useScrapeStore = create<ScrapeState>()(
         case "logs_failed_show":
           if (typeof data === "string") {
             set((state) => {
-              const details = [...state.failedDetails, data];
+              const details = [...state.failedDetails, { id: nextId(), text: data }];
               return {
                 failedDetails: details.length > MAX_FAILED_DETAILS ? details.slice(-MAX_FAILED_DETAILS) : details,
               };
@@ -171,10 +222,15 @@ export const useScrapeStore = create<ScrapeState>()(
             name: r.name,
             status: r.status === "succ" ? ("succ" as const) : ("fail" as const),
             realNumber: r.real_number,
+            ts: r.ts || undefined,
+            detail: (r.detail ?? undefined) as ScrapeResultDetail | undefined,
           }));
           return {
             results: [...history, ...state.results].slice(-MAX_RESULTS),
-            failedDetails: [...data.failed_details, ...state.failedDetails].slice(-MAX_FAILED_DETAILS),
+            failedDetails: [
+              ...data.failed_details.map((t) => ({ id: nextId(), text: t })),
+              ...state.failedDetails,
+            ].slice(-MAX_FAILED_DETAILS),
           };
         });
       } catch (err) {

@@ -23,6 +23,23 @@ export type AskAnswer = {
 };
 
 /**
+ * BackfillResponse
+ * 历史导入结果.
+ */
+export type BackfillResponse = {
+    /**
+     * Scanned
+     * 扫描到的 NFO 文件数量
+     */
+    scanned: number;
+    /**
+     * Imported
+     * 新导入的记录数量 (已存在的自动跳过)
+     */
+    imported: number;
+};
+
+/**
  * CDChar
  */
 export type CdChar = 'letter' | 'endc' | 'digital' | 'middle_number' | 'underline' | 'space' | 'point';
@@ -1559,11 +1576,23 @@ export type ScrapeResultEntry = {
      * 识别出的番号
      */
     real_number: string;
+    /**
+     * Ts
+     * 记录时间戳; 历史导入的条目为 NFO 修改时间
+     */
+    ts?: number;
+    /**
+     * Detail
+     * 预览元数据 (标题/演员/封面路径等), 可能为空
+     */
+    detail?: {
+        [key: string]: unknown;
+    } | null;
 };
 
 /**
  * ScrapeResults
- * 刮削结果明细, 服务端留存的部分 (浏览器关闭期间的条目也在).
+ * 刮削结果明细, 服务端留存的部分 (跨重启持久化, 持续累积).
  */
 export type ScrapeResults = {
     /**
@@ -2219,6 +2248,22 @@ export type GetScrapeResultsResponses = {
 };
 
 export type GetScrapeResultsResponse = GetScrapeResultsResponses[keyof GetScrapeResultsResponses];
+
+export type BackfillHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/scrape/backfill';
+};
+
+export type BackfillHistoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: BackfillResponse;
+};
+
+export type BackfillHistoryResponse = BackfillHistoryResponses[keyof BackfillHistoryResponses];
 
 export type GetScrapeStatusData = {
     body?: never;

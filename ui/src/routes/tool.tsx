@@ -55,6 +55,10 @@ import { PosterCutter } from "../components/PosterCutter";
 import { useToast } from "../contexts/ToastProvider";
 
 export const Route = createFileRoute("/tool")({
+  // 支持从刮削结果详情跳转过来时预填封面裁剪器的图片路径: /tool?cutterPath=...
+  validateSearch: (search: Record<string, unknown>): { cutterPath?: string } => ({
+    cutterPath: typeof search.cutterPath === "string" && search.cutterPath ? search.cutterPath : undefined,
+  }),
   component: ToolComponent,
 });
 
@@ -129,6 +133,12 @@ function ToolComponent() {
   const [showSuccessList, setShowSuccessList] = useState(false);
   const [showFailedList, setShowFailedList] = useState(false);
   const [cutterOpen, setCutterOpen] = useState(false);
+  const { cutterPath } = Route.useSearch();
+
+  // 从其它页面带着图片路径跳转过来时, 自动打开封面裁剪器
+  useEffect(() => {
+    if (cutterPath) setCutterOpen(true);
+  }, [cutterPath]);
 
   const successCount = successList.data?.count ?? 0;
   const failedCount = failedList.data?.count ?? 0;
@@ -769,7 +779,7 @@ function ToolComponent() {
       </Box>
 
       {/* 封面裁剪 */}
-      <PosterCutter open={cutterOpen} onClose={() => setCutterOpen(false)} />
+      <PosterCutter open={cutterOpen} onClose={() => setCutterOpen(false)} initialPath={cutterPath} />
 
       {/* 破坏性操作确认 */}
       <Dialog open={confirm !== null} onClose={() => setConfirm(null)} maxWidth="xs" fullWidth>

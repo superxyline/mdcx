@@ -14,6 +14,7 @@
 // 图标按路径导入: MUI 9 的 icons-material 包入口是 CJS, 打包器静态分析
 // 无法识别全部命名导出, barrel 导入会报 "export not found"
 import CheckCircleOutlined from "@mui/icons-material/CheckCircleOutlined";
+import CloudSyncOutlined from "@mui/icons-material/CloudSyncOutlined";
 import ErrorOutlined from "@mui/icons-material/ErrorOutlined";
 import FolderOpen from "@mui/icons-material/FolderOpen";
 import PlayArrow from "@mui/icons-material/PlayArrow";
@@ -32,7 +33,7 @@ import {
   Divider,
   LinearProgress,
   List,
-  ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   Stack,
@@ -40,13 +41,15 @@ import {
   Tabs,
   Typography,
 } from "@mui/material";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link as RouterLink } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getCurrentConfigOptions } from "@/client/@tanstack/react-query.gen";
+import { backfillHistoryMutation, getCurrentConfigOptions } from "@/client/@tanstack/react-query.gen";
 import { getScrapeStatus, startScrape, stopScrape } from "@/client/sdk.gen";
+import { PosterThumb, ResultDetailDialog } from "@/components/ResultDetail";
 import { WizardDialog } from "@/components/WizardDialog";
-import { useScrapeStore } from "@/store/scrapeStore";
+import { useToast } from "@/contexts/ToastProvider";
+import { type ScrapeListItem, useScrapeStore } from "@/store/scrapeStore";
 
 export const Route = createFileRoute("/")({
   component: ScrapePage,
@@ -62,6 +65,13 @@ function formatElapsed(seconds: number): string {
   if (h > 0) return `${h}h${m}m${s}s`;
   if (m > 0) return `${m}m${s}s`;
   return `${s}s`;
+}
+
+/** 结果条目的记录时间. */
+function formatTime(ts: number): string {
+  if (!ts) return "";
+  const d = new Date(ts * 1000);
+  return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {
@@ -87,12 +97,18 @@ function ScrapePage() {
   const statusText = useScrapeStore((s) => s.statusText);
   const countText = useScrapeStore((s) => s.countText);
   const results = useScrapeStore((s) => s.results);
+  const failedDetails = useScrapeStore((s) => s.failedDetails);
+  const { showSuccess, showError } = useToast();
 
   const [mediaPath, setMediaPath] = useState("");
   const [confirmStop, setConfirmStop] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState(0);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [detailItem, setDetailItem] = useState<ScrapeListItem | null>(null);
+
+  // 从媒体库导入历史刮削记录 (NFO 扫描回填)
+  const backfillMut = useMutation(backfillHistoryMutation());
 
   // 配置: 既用于展示刮削目录, 也用于判断是否弹出首次使用向导
   const configQ = useQuery(getCurrentConfigOptions());
@@ -237,19 +253,44 @@ function ScrapePage() {
 
       <Card>
         <CardContent>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 1 }}>
-            <Tab label={`成功 (${successItems.length})`} />
-            <Tab label={`失败 (${failedItems.length})`} />
-          </Tabs>
+          <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
+            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ flexGrow: 1 }}>
+              <Tab label={`成功 (${successItems.length})`} />
+              <Tab label={`失败 (${failedItems.length})`} />
+            </Tabs>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<CloudSyncOutlined />}
+              disabled={backfillMut.isPending}
+              onClick={() =>
+                backfillMut.mutate(undefined, {
+                  onSuccess: (res) => {
+                    if (res.data) {
+                      if (res.data.imported > 0) {
+                        showSuccess(`已从媒体库导入 ${res.data.imported} 条历史记录`);
+                      } else {
+                        showSuccess(`没有新记录 (扫描到 ${res.data.scanned} 个 NFO)`);
+                      }
+                    }
+                    void useScrapeStore.getState().loadHistory();
+                  },
+                  onError: (err) => showError(`导入失败: ${err}`),
+                })
+              }
+            >
+              {backfillMut.isPending ? "扫描中..." : "导入历史"}
+            </Button>
+          </Stack>
           <Divider />
           {listedItems.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
-              {tab === 0 ? "暂无成功记录" : "暂无失败记录"}
+              {tab === 0 ? "暂无成功记录, 点右上角「导入历史」可找回之前刮削过的影片" : "暂无失败记录"}
             </Typography>
           ) : (
             <List dense sx={{ maxHeight: 420, overflow: "auto" }}>
               {listedItems.map((item) => (
-                <ListItem key={item.id} disableGutters>
+                <ListItemButton key={item.id} disableGutters onClick={() => setDetailItem(item)}>
                   <ListItemIcon sx={{ minWidth: 36 }}>
                     {item.status === "succ" ? (
                       <CheckCircleOutlined fontSize="small" color="success" />
@@ -257,17 +298,39 @@ function ScrapePage() {
                       <ErrorOutlined fontSize="small" color="error" />
                     )}
                   </ListItemIcon>
+                  {item.detail?.poster_path && <PosterThumb path={item.detail.poster_path} height={56} />}
                   <ListItemText
                     primary={item.name}
-                    secondary={item.realNumber || undefined}
+                    secondary={
+                      item.realNumber || item.ts
+                        ? [item.realNumber, item.ts ? formatTime(item.ts) : ""].filter(Boolean).join(" · ")
+                        : undefined
+                    }
                     slotProps={{ primary: { variant: "body2" }, secondary: { variant: "caption" } }}
+                    sx={{ ml: 1 }}
                   />
-                </ListItem>
+                </ListItemButton>
               ))}
             </List>
           )}
+          {tab === 1 && failedDetails.length > 0 && (
+            <Box sx={{ mt: 1, maxHeight: 160, overflow: "auto" }}>
+              {failedDetails.map((fd) => (
+                <Typography
+                  key={fd.id}
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", whiteSpace: "pre-wrap", wordBreak: "break-all" }}
+                >
+                  {fd.text}
+                </Typography>
+              ))}
+            </Box>
+          )}
         </CardContent>
       </Card>
+
+      <ResultDetailDialog item={detailItem} onClose={() => setDetailItem(null)} />
 
       <Dialog open={confirmStop} onClose={() => setConfirmStop(false)} maxWidth="xs" fullWidth>
         <DialogTitle>停止刮削</DialogTitle>
