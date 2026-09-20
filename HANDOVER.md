@@ -1,69 +1,7 @@
 # 项目交接文档
 
-> 最后更新：2026-09-19（晚 2：结果列表持久化与预览）
-> 用途：供新对话快速了解项目全貌，接续开发
-
----
-
-## 〇-2、2026-09-19 晚 2：刮削结果列表持久化 + 点击预览（本轮）
-
-背景：结果列表原本只在内存(环形缓冲)，每轮刮削清空、容器重启全丢，用户看到的永远是空的。
-
-1. **结果持久化**：`result_buffer.py` 重写。每条成功/失败记录追加写入用户数据目录的
-   `scrape_history.jsonl`（容器内 /data，已加 .gitignore），启动时自动加载，跨轮次跨重启持续累积。
-   每轮刮削**不再清空**列表（legacy.py 的 clear 调用已删），统计数字仍按轮计算。
-   失败原因明细(failed_details)同样持久化。
-2. **记录带预览元数据**：`signals._result_detail()` 从 ShowData 提取 标题/演员/发行日期/番号/
-   马赛克/海报路径/fanart路径/文件路径/目录，随记录一起存。前端实时推送和 REST 都带 detail。
-3. **历史导入**：`POST /api/v1/scrape/backfill`（首页右上「导入历史」按钮）。扫描**成功输出目录 + 媒体库根目录**
-   两个位置下所有 NFO，解析 title/num/actor/releasedate 生成成功记录，按 nfo_path/file_path 去重，
-   时间戳用 NFO mtime。解析失败的 NFO 直接跳过（比如种子自带的 ASCII 艺术字说明文件）。
-   **注意（用户已明确纠正）**：media_path=/media/待刮削 是用户的**私密影视库**，是有意设置的；
-   /media（电影/电视剧）是正常影视库，与 mdcx 无关。2026-09-19 晚曾误把 media_path 改成 /media，
-   已恢复回 /media/待刮削。**今后严禁改动媒体路径相关配置**（已写入 E:\codex\AGENTS.md）。
-4. **前端预览**：`ResultDetail.tsx`。列表项带封面缩略图(`PosterThumb`，blob URL 带 API Key 认证)，
-   点击弹出详情(封面大图+元数据+文件路径)；详情里「在工具箱中裁剪封面」跳 `/tool?cutterPath=...`
-   (tool.tsx 加了 validateSearch，PosterCutter 加 initialPath 自动载入)。失败页底部展示失败原因明细。
-5. **顺手修了存量 bug**：`utils/path.py` 的 `is_descendant` 在 Windows 跨盘符时
-   `os.path.commonpath` 抛 ValueError → 现在返回 False。test_path 那个一直失败的用例已转绿。
-
-遗留（本轮没做）：刮削前预览确认、媒体库浏览页、硬链接整理模式、访问密码引导。
-
----
-
-## 〇-3、2026-09-19 晚 3：刮削完成链路五件套（本轮）
-
-1. **失败一键重试**：后端 retryFailedList 本来就有, 首页失败页签加了「重试失败」按钮
-   (把失败文件作为待刮清单重新提交)。注意 Flags.failed_list 只存本轮(内存), 重启后为空。
-2. **完成通知**：`mdcx/notify.py`。配置新增 通知设置 区(设置页常用组):
-   notify_type(bark/telegram/none) + bark_url/bark_key + telegram_bot_token/chat_id。
-   刮削完成(core/scraper.py 钩子)推送统计, Telegram 走配置的代理。失败只记日志不影响刮削。
-3. **Emby/Jellyfin 刷新**：配置 emby_refresh(媒体服务器分区)开关, 完成后 POST
-   {emby_url}/emby/Library/Refresh?api_key=..., 局域网直连不走代理。
-4. **定时自动刮削**：`mdcx/server/scheduler.py`, lifespan 启动 asyncio 任务每 30s tick:
-   switch_on 含 timed_scrape + 后台空闲 + 距上次运行超过 timed_interval → 自动开刮。
-   上次运行时间持久化在 /data/timed_scrape.json; 首次启动只记基准不触发。
-   状态随 /scrape/status 返回(timed_enabled/timed_next_run/...), 首页空闲时显示下次运行时间。
-   开关和间隔在 设置→杂项(switch_on/timed_interval)。改配置立即生效(每次 tick 读当前配置)。
-5. **健康检查**：GET /api/v1/tools/health-report, 同步扫描媒体路径, 按 NFO 找出
-   未刮削(视频无NFO)/缺封面/缺字段(title/releasedate/actor)/NFO解析失败, 各类最多500条。
-   工具箱新增「健康检查」卡片(开始扫描 + 分类结果)。
-
-曾踩坑：status() 返回键名 enabled 与 ScrapeStatus 字段 timed_enabled 不一致,
-pydantic 静默丢弃导致状态永远 False —— ** 解包时键名必须与模型字段完全一致。
-
----
-
-## 〇、2026-09-19 晚：易用性改造（上一轮）
-
-1. **侧边栏中文化**：`Layout.tsx` 菜单改为 首页/工具箱/网络/日志/设置/关于，顶栏改「MDCx 影片元数据刮削」。
-2. **设置页分区导航**：`settings.tsx` 重构为左侧分区列表（常用设置 3 区 + 高级选项 9 区），一次只渲染当前分区的字段（其余字段以 `ui:widget: hidden` 隐藏但保留值，跨分区修改不丢）。分区定义在 `SECTIONS` 常量；漏归类的字段自动落入「杂项」。`wizard_done` 字段已列入 `HIDDEN_FIELDS`。
-3. **常用字段加解释**：`models.py` 里 快速上手/媒体服务器/代理与网络 的字段补了 `description`（rjsf 渲染为字段下方的说明文字）；`ChipArrayField` 也支持渲染 description。
-4. **首次使用向导**：`WizardDialog.tsx`，首页检测 `wizard_done === false` 时弹出，三步：媒体库路径 → 整理方式（移动到输出目录/原地保留）→ 代理。完成或跳过都写入 `wizard_done: true`。存量 config.json 没有该字段，部署后首次打开会弹一次，点跳过即可。
-5. **IGNORE_* 从设置页隐藏**：`json_schema()` 给 download_files 的枚举标记 `deprecated`（`_mark_dead_download_options`），`ChipArrayField` 不再提供这 4 个选项；旧配置里已勾选的值仍显示中文名、可删除。枚举成员保留，解析不受影响。
-6. **修复设置页横向超宽**：容器加 `overflowX: hidden` + 分组标题 `overflowWrap: anywhere`（见 settings.tsx 根 Box）；表单根标题 "Config" 不再重复显示。
-
-遗留（本轮没做）：失败重试队列、定时扫描、刮削完通知 Emby 刷新、刮削前预览确认。
+> 最后更新：2026-09-19（深夜，会话结束交接）
+> 用途：供新对话快速了解项目全貌，接续开发。**新对话请先通读本文件再动手。**
 
 ---
 
@@ -84,242 +22,250 @@ pydantic 静默丢弃导致状态永远 False —— ** 解包时键名必须与
 
 | 项目 | 值 |
 |---|---|
-| 本地路径 | `E:\codex\mdcx` |
-| GitHub | `https://github.com/superxyline/mdcx`（公开，分支 `master`） |
+| 本地路径 | `E:\codex\mdcx`（git 工作区干净，与 GitHub 同步） |
+| GitHub | `https://github.com/superxyline/mdcx`（公开，分支 `master`，最新提交 `9649de6`） |
 | 上游 remote `origin` | `https://ghproxy.net/https://github.com/sqzw-x/mdcx.git`（只读加速） |
-| 推送 remote `github` | `https://github.com:443/superxyline/mdcx.git` |
+| 推送 remote `github` | `https://github.com:443/superxyline/mdcx.git`（带端口绕过 insteadOf 改写） |
 | 回退点 | tag `before-qt-removal`（摘除 Qt 前的完整状态） |
 
-**NAS 部署（已完成，实测通过）**
+**NAS 部署（2026-09-19 深夜已部署至最新提交，实测通过）**
 
 | 项目 | 值 |
 |---|---|
 | 地址 | `192.168.31.26`，飞牛 fnOS（Debian 12，x86_64） |
 | Web | `http://192.168.31.26:8000` |
-| 部署目录 | `/vol1/1000/Docker/mdcx/` |
+| 部署目录 | `/vol1/1000/Docker/mdcx/`（源码 + data 数据卷 + clash 配置） |
 | 容器 | `mdcx`（8000）、`mdcx-clash`（7890 代理 / 9090 面板） |
-| 媒体库 | `/vol1/1000/影视` → 容器内 `/media` |
-| 当前成果 | 439 部片子，全部带齐封面/背景图/缩略图/NFO |
+| 数据目录 | 容器内 `/data`（= 宿主机 `.../mdcx/data/`），含 config.json、scrape_history.jsonl、timed_scrape.json、番号库 |
 
-> SSH 用户 `<NAS用户名>`，**密码未记录在文档中**，需要时向用户索取。
-> docker 命令需要 `sudo`，且 sudo 需要密码。
+**SSH 免交互访问（本轮已配好并验证，直接可用）**
 
----
+- 用户 `<NAS用户名>`，密码 `<NAS密码>`；docker 需要 `sudo`（密码同上）。
+- 辅助脚本：`E:\codex\tools\nas_ssh.py`（paramiko 封装，已装进 `E:\codex\tools\python310`）：
+  - `python nas_ssh.py "<shell命令>"` —— 执行远程命令
+  - `python nas_ssh.py --put <本地> <远程>` —— 上传并自动 md5 校验 ✅ 已实测可用
+    （该 NAS 的 SFTP 被沙箱限制不可用，脚本内部走 exec 通道 `cat >` 流式写入；
+    Git Bash 的 MSYS 路径改写也已内置还原，直接传 `/home/...` 即可）
+- 部署流程：本地 `tar` 打包源码（排除 node_modules/dist/.git/userdata/media）→
+  `nas_ssh.py --put` 上传到 `/home/Aadmin/` → 解压覆盖 `/vol1/1000/Docker/mdcx/`
+  → `docker compose up -d --build`（约 3 分钟）→ curl 状态接口验证。
 
-## 三、2026-09-19 会话完成的工作
+**NAS 当前配置（用户设定，⚠️ 严禁改动，详见「三」）**
 
-### 1. ABP-646 封面不裁剪（根因确认 + 彻底修复）
-
-上次会话只把 4 个 `IGNORE_*` 从**默认配置**移除，对 NAS 上的**存量 config.json 无效**——
-里面勾过的 `ignore_youma` 让有码片在 `core/web.py` 直接复制横版 thumb 跳过裁剪。
-本次删除了整个跳过分支：**无论配置怎么勾，封面都走裁剪**（FC2/无码居中、国产右侧不变）。
-枚举值保留，旧配置解析不报错。NAS 上无需改 config.json，更新代码即可。
-
-### 2. 改配置需重启容器（已修）
-
-`update_config` 现在重建 `manager.computed`，代理/超时等改完立即生效。
-有回归测试 `tests/test_server_api.py`。
-
-### 3. 结果明细刷新丢失（已修）
-
-新增 `mdcx/server/result_buffer.py` 环形缓冲（2000 条），信号写 WS 的同时留存；
-`GET /api/v1/scrape/results` 供页面加载时补回；新一轮刮削开始时清空。
-前端 `scrapeStore.loadHistory()` 在主页加载时拉取并合并到实时推送之前。
-
-### 4. 设置页配置管理入口（已补）
-
-新增 `GET /config/list`；设置页顶部新增配置栏：切换/新建/删除/重置为默认（均带确认），
-切换后重置表单草稿。顺带修了 `create` 写 v1 ini 到 `.json` 导致 switch 静默回落默认配置的问题。
-浏览器端到端实测通过（新建→切换→切回→删除）。
-
-### 5. 无官网支持前缀：实测结论是**不能补**
-
-`official.py` 的 xpath 强耦合 FANZA 系官网统一模板（`p-workPage__title` 等类名）。
-两轮实测 SOD/MAXING/TMA/CENTER VILLAGE/CRYSTAL/ALICE JAPAN/NaturalHigh/Nagae 等
-均非该模板（搜索路径 404 或无结果），模板体系内的官网上游已收录较全。
-**盲目补表 = 每次刮削白等一次请求超时**，故不补。验证脚本保留在
-`scripts/check_official_sites.py`，将来想复核直接改候选列表重跑。
-缺失前缀（STARS/START/MIDA/MXGS 等）由 javbus/jav321 兜底，功能无损失。
+| 配置项 | 值 |
+|---|---|
+| media_path | `/media/待刮削`（**用户的私密影视库**） |
+| success_output_folder | `/media/整理完成` |
+| failed_output_folder | `/media/刮削失败` |
+| 定时刮削 timed_scrape | **关闭**（功能已实现，由用户决定何时在 设置→杂项 开启） |
+| 完成通知 | 未配置（notify_type=none，用户没填 Bark/TG） |
+| emby_refresh | 关闭 |
+| wizard_done | true（向导已跳过，不会再弹） |
 
 ---
 
-## 四、上一轮（09-18）完成的工作（摘要）
+## 三、⚠️ 用户红线（2026-09-19 用户明确纠正，务必遵守）
 
-1. 设置页接上保存接口，保存按钮改右下角悬浮栏
-2. 站点优先级改 `official → javbus → jav321 → javdb → dmm`，图片类 `javbus → dmm → theporndb`
-3. 官网前缀表补 `sone|snos`
-4. `cd_char` 移除 `endc`（`-C` 是中文字幕标记，不再误判成第 3 集）
-5. 默认 `download_files` 去掉 4 个 `IGNORE_*`（见本轮第 1 条，当时不彻底）
-6. 从 `before-qt-removal` 恢复被误删的 `resources/Img`（水印图标）
-7. WS `to_json` 加 `default=str`
-8. 调优结果固化进 `config/models.py` 默认值（仅新装生效）
-9. README 重写为部署教程
+1. **严禁修改 NAS 上的媒体路径配置**（media_path / success_output_folder / failed_output_folder）。
+   - `/media/待刮削` 是用户的**私密影视库**，刮削就针对这里；
+   - `/media`（电影/电视剧）是用户**正常的影视库**，与 mdcx 刮削无关；
+   - 不要以"目录不存在/里面是普通影视"为由改动配置或移动文件。
+   - 本次会话曾两次误把 media_path 改成 `/media`，均已恢复。规则已写入 `E:\codex\AGENTS.md`。
+2. **对 mdcx 配置做任何修改前，先征得用户同意**（读取分析可以）。
+3. 定时刮削开关默认保持关闭，由用户自行决定何时开启。
 
 ---
 
-## 五、遗留事项
+## 四、功能现状（全部已部署 NAS 并实测）
 
-### 1. Clash 规则会导致内网流量绕行
+### 刮削主流程
+- 扫描 `/media/待刮削` → 识别番号 → 多站点抓取（official → javbus → jav321 → javdb → dmm）→
+  裁剪封面/下载图片/写 NFO → 按模板整理移动。
+- 单文件刮削接口必须传 URL（`/api/v1/legacy/scrape/single`）。
 
-`clash/config.yaml` 的规则是 `MATCH,节点选择`（全部走代理，因为 `GEOIP,CN,DIRECT` 会导致
-内核启动时下载 MMDB 失败）。mdcx 走代理后访问内网 Emby/Jellyfin 也会绕道节点。
-
-需要的话在 `rules` 里加内网直连，放在 `MATCH` 之前：
-
-```yaml
-- IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
-- IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
-- IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
-```
-
-### 2. 设置页横向超宽（低优先级，上游遗留）
-
-rjsf 表单里 `FieldConfig` 分组的 H5 标题把 `body scrollWidth` 撑到约 1676px（视口 1280），
-页面底部出现水平滚动条。与配置栏无关（其宽度正常），修复需调 rjsf 分组标题样式。
-
-### 3. IGNORE_* 选项仍在设置页显示
-
-枚举值保留是为了兼容存量配置解析；这 4 个「忽略有码/无码/FC2/国产」勾选已无任何效果，
-但设置页里还在显示。可从 ui_schema 隐藏。
-
-### 4. 其他
-
-- 单文件刮削接口（`/api/v1/legacy/scrape/single`）**必须传 URL**，空 URL 会报 Unsupported URL
-- 设置页的 媒体路径/软链接路径/输出目录 等字段是**只读**的（`ServerPathField`），
-  只能点「选择目录」通过文件浏览器改，不能手输
+### Web 界面（React + MUI，全中文）
+- **首页**：进度/统计 + 成功/失败列表（**持久化**，见下）+ 导入历史 + 失败重试 + 首次使用向导。
+- **结果持久化与预览**：每条成功/失败记录（含预览元数据与失败原因）写入
+  `/data/scrape_history.jsonl`，跨轮次跨重启累积；列表带封面缩略图，点击弹详情
+  （封面大图/番号/演员/日期/文件路径），详情可跳工具箱裁剪器自动载入（`/tool?cutterPath=...`）。
+- **历史导入**：首页右上「导入历史」→ `POST /api/v1/scrape/backfill`，扫描成功输出目录 +
+  media_path 下的 XML NFO 回填成功记录（去重；解析失败的 NFO——如种子自带说明文件——跳过）。
+- **设置页**：左侧分区导航（常用：快速上手/媒体服务器/代理与网络/完成通知；高级 9 区），
+  一次只渲染当前分区，其余字段隐藏但保留值；常用字段带解释文字。
+- **工具箱**：封面裁剪、单文件刮削、成功/失败列表、健康检查（未刮削/缺封面/缺字段分类报告）、
+  演员工具、字幕/剧照/主题视频批量处理等。
+- **失败重试**：失败页签「重试失败」按钮 → `retryFailedList`（仅对本轮失败记录，
+  Flags 在重启后清空）。
+- **完成通知**：`mdcx/notify.py`，Bark / Telegram（TG 走配置代理），完成钩子在
+  `core/scraper.py` 末尾，任何失败只写日志。
+- **Emby/Jellyfin 刷新**：`emby_refresh` 开关，完成后 POST `{emby_url}/emby/Library/Refresh?api_key=...`。
+- **定时自动刮削**：`mdcx/server/scheduler.py`，每 30s tick；开关 = switch_on 的 timed_scrape，
+  间隔 = 杂项里的 timed_interval；上次运行持久化在 `/data/timed_scrape.json`；重启后先记基准不触发；
+  状态随 `GET /scrape/status`（timed_enabled/timed_next_run），首页空闲时显示下次运行时间。
+- **网络页**：Clash 面板入口；**日志页**：WebSocket 实时日志。
 
 ---
 
-## 五、常用命令
+## 五、2026-09-19 会话工作记录（按时间序）
+
+1. **ABP-646 封面不裁剪彻底修复**：删除 `core/web.py` 里 IGNORE_* 跳过裁剪的整个分支，
+   无论配置怎么勾封面都裁剪（FC2/无码居中、国产右侧不变）。
+2. **改配置即时生效**：`update_config` 重建 `manager.computed`（代理/超时改完不用重启容器）。
+3. **设置页配置管理**：切换/新建/删除/重置，带确认。
+4. **官网前缀补表结论：不能补**（xpath 强耦合 FANZA 模板），缺失前缀由 javbus/jav321 兜底。
+5. **易用性改造**：界面中文化；设置页分区导航 + 字段解释；首次使用向导（`wizard_done`）；
+   IGNORE_* 失效选项从表单隐藏（schema 标记 deprecated）；修设置页横向超宽与重复标题。
+6. **结果列表持久化 + 点击预览 + 历史导入**（详见「四」）；顺手修了
+   `utils/path.py` 在 Windows 跨盘符时 `os.path.commonpath` 抛异常的存量 bug（test_path 转绿）。
+7. **完成链路五件套**：失败重试 / 完成通知 / Emby 刷新 / 定时刮削 / 健康检查（详见「四」）。
+8. **媒体路径误改与恢复**：曾误把 media_path 改成 /media（两次），已全部恢复为
+   `/media/待刮削` 并落盘验证；规则写入 AGENTS.md（见「三」）。
+
+---
+
+## 六、遗留事项（按优先级）
+
+1. **刮削前预览确认**：识别后先展示番号/封面让用户确认再写文件（防误刮，交互改动较大）。
+2. **媒体库浏览页**：按演员/系列/日期浏览已刮影片的墙页（数据在 NFO 里），点开复用结果详情弹窗。
+3. **硬链接整理模式**：现有软链接在源路径变化时断，硬链接更适合单独挂媒体服务器的场景。
+4. **访问密码引导**：接口认证目前关闭（MDCX_API_KEY=""），局域网内任何设备可读写文件；
+   认证页代码已有（/auth），只差引导用户设置 Key。
+5. **失败记录跨重启**：Flags.failed_list 只存本轮（内存），重启后「重试失败」不可用；
+   可考虑把失败列表也持久化。
+6. **Clash 内网直连规则**：`clash/config.yaml` 规则是 `MATCH,节点选择`，mdcx 走代理后访问
+   内网 Emby 会绕道节点。需要在 rules 的 MATCH 前加：
+   ```yaml
+   - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+   - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+   - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+   ```
+   （GEOIP,CN,DIRECT 会导致内核启动时下载 MMDB 失败，所以没加。）
+7. 单文件刮削接口必须传 URL，小白不友好——可做成"自动猜站点"。
+
+---
+
+## 七、常用命令
 
 ### 本地开发
 
 ```bash
 cd /e/codex/mdcx
-uv sync --all-extras --dev
-uv run uvicorn server:app --host 127.0.0.1 --port 8000   # 启动服务
-uv run pytest                                             # 测试
+uv run uvicorn server:app --host 127.0.0.1 --port 8000   # 启动服务(建议加 MDCX_SAFE_DIRS 指向测试媒体目录)
+uv run pytest                                             # 测试(65 passed)
 uv run ruff check mdcx/ server.py                         # 代码检查
 
-cd ui && pnpm build        # 构建前端
-cd ui && pnpm run ci       # 前端 lint
+cd ui && pnpm build        # 构建前端 (rsbuild)
+cd ui && pnpm run ci       # 前端 lint (biome)
 ```
 
-> node 需要加进 PATH：`export PATH="/e/codex/tools/node-v24.19.0-win-x64:$PATH"`
+> node 加 PATH：`export PATH="/e/codex/tools/node-v24.19.0-win-x64:$PATH"`
 > pnpm：`/e/codex/tools/pnpm/node_modules/.bin/pnpm.cmd`
+> 改后端接口后要 `pnpm gen:client` 重新生成前端类型（需本地服务跑在 8000）
+> ⚠️ 本地媒体路径 `/media` 不存在是正常的；媒体路径配置**不要改**（见「三」），
+> 本地测试用 `MDCX_SAFE_DIRS="E:/codex/mdcx/media"` 环境变量造测试数据。
+
+### NAS 部署（源码同步 + 重建，实测 3 分钟左右）
+
+```bash
+# 1. 本地打包
+cd /e/codex/mdcx
+tar czf /e/codex/tools/mdcx-src.tar.gz --exclude='ui/node_modules' --exclude='ui/dist' \
+  --exclude='__pycache__' --exclude='.git' --exclude='userdata' --exclude='*.egg-info' \
+  --exclude='.ruff_cache' --exclude='.pytest_cache' --exclude='media' \
+  mdcx ui resources docker server.py pyproject.toml uv.lock
+
+# 2. 上传(exec 通道, SFTP 不可用) —— 用 E:\codex\tools\nas_ssh.py
+# 3. NAS 上解压覆盖 /vol1/1000/Docker/mdcx/ (先备份到 /home/Aadmin/)
+# 4. 重建:
+cd /vol1/1000/Docker/mdcx
+echo <NAS密码> | sudo -S sh -c 'nohup docker compose up -d --build > /home/Aadmin/mdcx-build.log 2>&1 &'
+# 5. 等 3 分钟, tail 日志确认 "Container mdcx Started", curl /api/v1/scrape/status 验证
+```
 
 ### NAS 运维
 
 ```bash
 cd /vol1/1000/Docker/mdcx
 sudo docker compose logs -f mdcx     # 日志
-sudo docker compose restart mdcx     # 重启（改配置后必须）
+sudo docker compose restart mdcx     # 重启
 sudo docker compose up -d --build    # 重建镜像
 ```
 
-**快速部署（不重建镜像）**：本地构建前端后 `docker cp` 进容器即可，
-静态文件是每次请求时读取的，不用重启：
-
-```bash
-tar -czf /tmp/ui.tar.gz dist
-scp /tmp/ui.tar.gz <NAS用户名>@192.168.31.26:/tmp/
-# NAS 上
-cd /tmp && tar -xzf ui.tar.gz && sudo docker cp dist/. mdcx:/app/ui/dist/
-```
-
-> 这种方式改的是容器可写层，`docker compose up -d --build` 重建后会失效，需要重新拷。
-
 ---
 
-## 六、踩过的坑
+## 八、踩过的坑（重要，先读再写代码）
 
-### 环境相关
+### 环境
 
-1. **git 有全局 `insteadOf` 规则**会把 `github.com` 改写成 `ghproxy.net`（只读加速，**不能推送**）。
-   推送时 remote 要用 `https://github.com:443/<user>/<repo>.git` 这种带端口的形式绕过。
-2. **Git Bash 的 `/tmp` 与 Windows python 的路径不通用** —— 传给 Windows 程序的文件路径
-   要用 `E:\...` 或 `E:/...`。
-3. **命令行传含中文的 JSON 会编码出错**，写成文件再用 `--data-binary @file` 才可靠。
+1. **git 全局 `insteadOf`** 把 `github.com` 改写成 `ghproxy.net`（只读）。推送用
+   `https://github.com:443/<user>/<repo>.git`。
+2. **Git Bash 的 `/tmp` 与 Windows python 路径不通用**，传给 Windows 程序用 `E:/...`。
+3. **命令行传含中文 JSON 会编码出错**，写文件再 `--data-binary @file`。
+4. **fnOS 的 SFTP 沙箱不可用**，paramiko 用 exec 通道 `cat >` 传文件（nas_ssh.py 已实现）。
+5. **Git Bash 会改写以 `/` 开头的命令行参数**（MSYS 路径转换）：
+   本机 Git 装在 `E:\codex\tools\git`，于是 `/home/Aadmin/x` 会被传成
+   `E:/codex/tools/git/home/Aadmin/x`，远端命令自然失败。nas_ssh.py 已内置还原；
+   直接用 bash 传参时也可加 `MSYS_NO_PATHCONV=1`。
+6. NAS 的 docker 需要 `echo 密码 | sudo -S`。
 
-### 代码相关
+### 代码
 
-4. **测试 mdcx 内部函数要模拟服务端初始化**，否则会因「开发模式不允许监听 0.0.0.0」
-   或「信号未初始化」失败：
-
+7. **rjsf `**` 解包键名必须与 pydantic 模型字段完全一致**，否则被静默丢弃
+   （定时刮削的 status() 曾因键名 enabled ≠ timed_enabled 调试半天）。
+8. **测试内部函数要模拟服务端初始化**：
    ```python
    from mdcx.server import var; var.is_server = True
    from mdcx.server.signals import signal
    from mdcx.signals import set_signal; set_signal(signal)
    ```
-
-5. **`async_client` 绑定在后台执行器的事件循环上** —— 在别的 loop 里直接 `await` 会报
-   `attached to a different loop`。要用 `mdcx.utils.executor.run(coro)`。
-
-6. **mdcx 的日志走 WebSocket，不写文件**（`save_log` 配置项是废弃的）。
-   要抓日志需连 `ws://<host>/api/v1/ws/`，且**必须带子协议 `v1.mdcx`**，
-   否则 `NegotiationError: no subprotocols supported`。
-
-7. **`LogBuffer` 按协程任务隔离** —— 用 `asyncio.wait_for` 包住会另起 task，读不到错误日志。
-
-8. **Windows 换行符会产生大量假 diff** —— `git status` 显示 M 但 `git diff` 为空时是 CRLF 问题。
-
-9. **Starlette 抛的是自己的 HTTPException**，FastAPI 的是其子类，`except` 必须捕获父类。
-
-10. **fnOS 上构建 Docker 镜像的坑**：buildkit 解析 `FROM` 会 401，需要先 `docker pull`
-    基础镜像再用 `DOCKER_BUILDKIT=0` 构建；Dockerfile 里不能用 `# syntax=docker/dockerfile:1`。
+9. **`async_client` 绑定后台执行器事件循环**，别的 loop 里 await 会报
+   `attached to a different loop`；用 `mdcx.utils.executor.run(coro)`。
+10. **日志走 WebSocket 不写文件**；WS 必须带子协议 `v1.mdcx`。
+11. **Starlette 的 HTTPException 是 FastAPI 的父类**，`except` 必须捕获父类。
+12. **Windows CRLF 假 diff**：git status 显示 M 但 diff 为空就是行尾问题；
+    ui 目录的文件改动后跑一次 `biome check --write src/` 会顺带统一行尾。
+13. **fnOS 构建 Docker**：Dockerfile 不能用 `# syntax=docker/dockerfile:1`（fnOS 镜像加速 401）。
+14. **biome ignore 注释要放在被警告的语句正上方**（如 useEffect 调用处，不是依赖数组上方）。
 
 ---
 
-## 七、项目结构（当前）
+## 九、项目结构（当前）
 
 ```
 mdcx/
-├── Dockerfile / docker-compose.yml / .dockerignore
-├── docker/                  # entrypoint.sh, deploy-nas.sh, README.md, clash 模板
+├── Dockerfile / docker-compose.yml
+├── docker/                  # entrypoint.sh, clash 模板
 ├── mdcx/
-│   ├── base/                # 文件/图片/视频基础操作
-│   ├── cmd/                 # 命令行工具
-│   ├── config/              # 配置管理(JSON Schema 驱动前端设置页)
-│   ├── core/                # 刮削主流程 (scraper.py, file_crawler.py, web.py, image.py)
-│   ├── crawlers/            # 数十个站点爬虫
-│   ├── models/              # 数据模型与全局状态(Flags)
-│   ├── server/              # Web 服务
-│   │   ├── api/v1/          # config / files / legacy / scrape / tools / ask / ws
-│   │   ├── ask.py           # 跨线程提问协议
-│   │   └── signals.py       # ServerSignals(转 WebSocket)
-│   ├── signals.py           # 信号分发入口
-│   ├── tools/               # 演员/字幕/缺失检查
-│   └── utils/               # 通用工具(含 AsyncBackgroundExecutor)
-├── ui/                      # React 前端
-│   └── src/
-│       ├── routes/          # index(刮削) / tool / settings / logs / network / about
-│       ├── components/      # AskDialog, PosterCutter, FileBrowser, form/*
-│       ├── store/           # scrapeStore, logStore
-│       └── theme/md3.ts     # MD3 主题
+│   ├── base/ core/ crawlers/ models/ tools/ utils/   # 刮削核心(上游结构)
+│   ├── config/              # 配置模型(JSON Schema 驱动设置页) + ui_schema
+│   ├── notify.py            # 完成通知 + Emby 刷新
+│   └── server/
+│       ├── api/v1/          # config / scrape / tools / files / legacy / ask / ws
+│       ├── result_buffer.py # 结果持久化(scrape_history.jsonl)
+│       ├── scheduler.py     # 定时自动刮削
+│       └── signals.py       # 信号 → WebSocket
+├── ui/src/
+│   ├── routes/              # index(首页) / tool / settings / logs / network / about
+│   ├── components/          # WizardDialog, ResultDetail, PosterCutter, FileBrowser, form/*
+│   └── store/               # scrapeStore(含持久化映射), logStore
 └── tests/
 ```
 
 ---
 
-## 八、用户偏好（来自 AGENTS.md）
+## 十、用户偏好（完整版在 E:\codex\AGENTS.md，务必遵守）
 
-- **写代码前必须先确认**，不要直接开始写
-- 优先复用开源项目，不要从头写
-- 构建/下载的工具放在 `E:\codex\tools`
-- Fork 代码优先用国内加速镜像
-- 构建 APK 需先确认，只构建 arm64
-- **思考过程用中文**
+- **写代码前必须先确认**（先给方案 → AskUserQuestion 确认 → 再动手）
+- **严禁改 NAS 媒体路径**（见「三」，本轮血的教训）
+- 思考过程用中文；优先复用开源代码；构建 APK 先确认只做 arm64
+- 工具放 `E:\codex\tools`；GitHub 推送用带端口 remote
 
 ---
 
-## 九、下一步建议
+## 十一、下一步建议
 
-按优先级：
-
-1. **把本轮改动部署到 NAS**：`sudo docker compose up -d --build` 重建镜像（fnOS 构建坑见「踩过的坑」10），
-   前端也可用 `docker cp` 快速部署（见「常用命令」）
-2. **重刮历史有码片**：存量 `config.json` 勾过的 `ignore_youma` 让之前刮的有码片封面是横版
-   （如 ABP-646），代码修复只对新刮削生效；旧的要用「重新刮削」模式跑一遍才会裁剪
-3. Clash 规则加内网直连（见遗留事项 1）
-4. 修设置页横向超宽（见遗留事项 2）、隐藏失效的 IGNORE_* 选项（见遗留事项 3）
-5. 按需补充 README 截图
+1. 等用户把待刮内容放进 `/media/待刮削` 后实际刮一轮，观察
+   结果列表/预览/持久化在真实数据上的表现
+2. 想启用自动化时：设置→杂项 勾 timed_scrape + 调 timed_interval；
+   通知填 Bark Key（国内最省事）；需要 Emby 自动刷库就开 emby_refresh
+3. 按需推进「六、遗留事项」：预览确认 → 媒体库浏览页 → 硬链接 → 访问密码
