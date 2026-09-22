@@ -3,6 +3,7 @@
 覆盖:
 - update_config 重建 manager.computed, 使代理等派生设置立即生效
 - 结果缓冲: 信号回调写入 -> REST 快照读出; 持久化到历史文件并可恢复
+- scrape/status 暴露 auth_enabled
 """
 
 import asyncio
@@ -14,7 +15,7 @@ var.is_server = True
 
 from mdcx.models.types import ShowData  # noqa: E402
 from mdcx.server.api.v1 import config as config_api  # noqa: E402
-from mdcx.server.api.v1.scrape import get_scrape_results  # noqa: E402
+from mdcx.server.api.v1 import scrape as scrape_api  # noqa: E402
 from mdcx.server.result_buffer import ResultBuffer, result_buffer  # noqa: E402
 from mdcx.server.signals import signal  # noqa: E402
 from mdcx.signals import set_signal  # noqa: E402
@@ -47,7 +48,7 @@ def test_signal_writes_result_with_detail(tmp_path, monkeypatch):
     signal.show_list_name("succ", show_data, "ABP-646")
     signal.logs_failed_show.emit("🔴 搜索失败: BAD-001")
 
-    snapshot = asyncio.run(get_scrape_results())
+    snapshot = asyncio.run(scrape_api.get_scrape_results())
     last = snapshot.results[-1]
     assert (last.status, last.name, last.real_number) == ("succ", "1-1.ABP-646", "ABP-646")
     assert last.ts > 0
@@ -79,3 +80,18 @@ def test_result_buffer_persists_and_recovers(tmp_path):
     # 继续追加不覆盖旧记录
     buf2.add_result("succ", "x", "X-001")
     assert len(ResultBuffer(history_file=hist).snapshot()[0]) == 3
+
+
+def test_scrape_status_reports_auth_enabled():
+    """auth_enabled 应随 MDCX_API_KEY 是否设置而变化."""
+    original = scrape_api.API_KEY
+    try:
+        scrape_api.API_KEY = ""
+        status = asyncio.run(scrape_api.get_scrape_status())
+        assert status.auth_enabled is False
+
+        scrape_api.API_KEY = "secret-test-key"
+        status = asyncio.run(scrape_api.get_scrape_status())
+        assert status.auth_enabled is True
+    finally:
+        scrape_api.API_KEY = original

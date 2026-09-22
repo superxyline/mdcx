@@ -52,6 +52,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     ask_manager.bind_loop(asyncio.get_running_loop())
 
+    # 恢复跨重启的失败列表 (工具箱「重试失败」依赖它)
+    from mdcx.models.flags import Flags
+    from mdcx.server.failed_list import failed_list_store
+
+    Flags.failed_list = failed_list_store.load()
+
     # 定时自动刮削调度器
     from mdcx.server.scheduler import timed_scraper
 

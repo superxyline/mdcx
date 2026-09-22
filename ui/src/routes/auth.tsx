@@ -1,15 +1,13 @@
 import { Alert, Box, Button, TextField, Typography } from "@mui/material";
-import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { client } from "../client/client.gen";
-import { getWebSocketConnections } from "../client/sdk.gen";
+import { applyApiKey, clearStoredApiKey, setStoredApiKey } from "@/lib/apiKey";
 
 export const Route = createFileRoute("/auth")({
   component: Auth,
 });
 
 function Auth() {
-  const { history } = useRouter();
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -20,17 +18,27 @@ function Auth() {
     setLoading(true);
     setError(null);
 
+    const key = inputValue.trim();
     try {
-      const key = inputValue.trim();
-      client.setConfig({ baseURL: import.meta.env.PROD ? "" : import.meta.env.PUBLIC_DEV_API_URL, auth: key });
-      await getWebSocketConnections();
-      // success
-      localStorage.setItem("apiKey", key);
-      history.canGoBack() ? history.back() : navigate({ to: "/" });
+      applyApiKey(key);
+      // throwOnError: 401 必须 reject, 否则 hey-api 会把错误当成功返回
+      const { getScrapeStatus } = await import("@/client/sdk.gen");
+      await getScrapeStatus({ throwOnError: true });
+      setStoredApiKey(key);
+      applyApiKey(key);
+      // 不用 history.back(): 重定向进来的历史栈里上一页可能还是 /auth
+      navigate({ to: "/", replace: true });
     } catch (e) {
-      localStorage.removeItem("apiKey");
-      client.setConfig({ baseURL: import.meta.env.PROD ? "" : import.meta.env.PUBLIC_DEV_API_URL, auth: undefined });
-      setError("API Key 无效或网络错误，请重试。");
+      clearStoredApiKey();
+      applyApiKey(null);
+      const status =
+        (e as { response?: { status?: number }; status?: number })?.response?.status ??
+        (e as { status?: number })?.status;
+      if (status === 401) {
+        setError("API Key 无效，请核对后重试。");
+      } else {
+        setError("网络错误或服务器不可用，请稍后重试。");
+      }
       console.error(e);
     } finally {
       setLoading(false);
@@ -50,10 +58,14 @@ function Auth() {
       }}
     >
       <Typography variant="h5" gutterBottom>
-        请设置 API Key
+        请输入 API Key
       </Typography>
       <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 2, maxWidth: "400px" }}>
-        需要提供有效的 API Key, 此 Key 需与 MDCx 服务器的 API_KEY 环境变量相匹配.
+        此 Key 需与服务器环境变量 MDCX_API_KEY 一致. NAS 部署的 Key 保存在{" "}
+        <Typography component="span" sx={{ fontFamily: "monospace" }}>
+          E:\codex\tools\mdcx_api_key.txt
+        </Typography>
+        .
       </Typography>
       {error && (
         <Alert severity="error" sx={{ mb: 2, width: "100%", maxWidth: "400px" }}>
@@ -67,6 +79,7 @@ function Auth() {
         onChange={(e) => setInputValue(e.target.value)}
         sx={{ width: "100%", maxWidth: "400px" }}
         disabled={loading}
+        autoFocus
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             handleSave();

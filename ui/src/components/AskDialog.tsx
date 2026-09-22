@@ -12,7 +12,7 @@
  * ``GET /ask/pending`` 补拉, 二者按 question_id 去重.
  */
 
-import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from "@mui/material";
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from "@mui/material";
 import { useEffect, useState } from "react";
 import { answerAsk, getPendingAsks } from "@/client/sdk.gen";
 import { webSocketManager } from "@/hooks/useWebSocket";
@@ -28,6 +28,8 @@ export interface AskRequest {
   question: string;
   detail: string;
   options: AskOption[];
+  /** 可选封面/预览图 URL (刮削前预览确认时由服务端附带) */
+  image_url?: string;
 }
 
 const dedupe = (prev: AskRequest[], incoming: AskRequest[]) => [
@@ -68,23 +70,37 @@ export function AskDialog() {
   const handleAnswer = async (value: string) => {
     setSubmitting(true);
     try {
-      await answerAsk({ path: { question_id: current.question_id }, body: { value } });
+      await answerAsk({ path: { question_id: current.question_id }, body: { value }, throwOnError: true });
+      setQueue((prev) => prev.filter((q) => q.question_id !== current.question_id));
     } catch (err) {
       console.error("提交答案失败:", err);
+      // 保持对话框, 允许重试; 不静默丢题
     } finally {
       setSubmitting(false);
-      setQueue((prev) => prev.filter((q) => q.question_id !== current.question_id));
     }
   };
 
   return (
     <Dialog open maxWidth="sm" fullWidth disableEscapeKeyDown>
       <DialogTitle>{current.question}</DialogTitle>
-      {current.detail ? (
-        <DialogContent>
+      <DialogContent>
+        {current.image_url ? (
+          <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+            <Box
+              component="img"
+              src={current.image_url}
+              alt="预览封面"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+              sx={{ maxHeight: 280, maxWidth: "100%", objectFit: "contain", borderRadius: 1 }}
+            />
+          </Box>
+        ) : null}
+        {current.detail ? (
           <DialogContentText sx={{ whiteSpace: "pre-wrap" }}>{current.detail}</DialogContentText>
-        </DialogContent>
-      ) : null}
+        ) : null}
+      </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 8 }}>
         {current.options.map((opt) => (
           <Button

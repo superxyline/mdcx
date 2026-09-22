@@ -72,6 +72,8 @@ class _Flags:
     scrape_start_time: float = 0.0
     success_list: set[Path] = field(default_factory=set)
     stop_other: bool = True  # 非刮削线程停止标识
+    # 预览确认: 本轮已选「全部通过」后置 True, 后续文件不再弹确认
+    preview_approve_all: bool = False
 
     # show
     log_txt: Any = None  # 日志文件对象
@@ -87,6 +89,7 @@ class _Flags:
 
     def reset(self) -> None:
         self.failed_list = []
+        self.preview_approve_all = False
         self.counting_order = 0
         self.total_count = 0
         self.rest_now_begin_count = 0

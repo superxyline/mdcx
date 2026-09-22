@@ -44,6 +44,7 @@ class PendingAsk:
     detail: str
     created_at: float
     future: concurrent.futures.Future[str] = field(repr=False)
+    image_url: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,6 +53,7 @@ class PendingAsk:
             "detail": self.detail,
             "options": [{"value": o.value, "label": o.label, "style": o.style} for o in self.options],
             "created_at": self.created_at,
+            "image_url": self.image_url,
         }
 
 
@@ -76,6 +78,7 @@ class AskManager:
         options: list[AskOption],
         detail: str = "",
         timeout: float = DEFAULT_ASK_TIMEOUT,
+        image_url: str = "",
     ) -> str | None:
         """提问并阻塞等待回答.
 
@@ -91,6 +94,7 @@ class AskManager:
             detail=detail,
             created_at=time.time(),
             future=concurrent.futures.Future(),
+            image_url=image_url,
         )
         with self._lock:
             self._pending[pending.question_id] = pending

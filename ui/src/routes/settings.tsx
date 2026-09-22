@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -614,6 +615,17 @@ function SettingsComponent() {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   {activeSection.desc}
                 </Typography>
+                {activeSection.key === "network" ? (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    接口访问密码由容器环境变量{" "}
+                    <Typography component="span" sx={{ fontFamily: "monospace", fontWeight: 600 }}>
+                      MDCX_API_KEY
+                    </Typography>{" "}
+                    控制（不是本页表单字段）。在宿主机 docker-compose.yml 的 mdcx 服务 environment
+                    里填写非空值并重启容器后立即生效；浏览器会跳转到 /auth 输入该
+                    Key。留空表示不校验（仅建议本机使用）。 「刮削前预览确认」开关在 高级选项 → 杂项 → 功能开关。
+                  </Alert>
+                ) : null}
                 <FormControl fullWidth sx={{ mb: 2 }}>
                   <Form
                     key={activeSection.key}

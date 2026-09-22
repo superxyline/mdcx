@@ -160,8 +160,8 @@ class WebSocketManager {
     this.errorState = event.reason || "WebSocket closed unexpectedly";
     this.notifyStateChange();
 
-    // Reconnect logic
-    if (!this.reconnectTimeoutId && import.meta.env.PUBLIC_DEV_ENABLE_WS === "true") {
+    // Reconnect logic (与是否开启认证无关; Key 在 localStorage, 重连时会再读)
+    if (!this.reconnectTimeoutId) {
       console.log("WebSocketManager: Scheduling reconnect in 5s...");
       this.reconnectTimeoutId = setTimeout(() => {
         this.reconnectTimeoutId = null;

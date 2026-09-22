@@ -72,7 +72,14 @@ proxy-groups:
 
 # ---------- 分流规则 ----------
 rules:
-  # 国内直连, 其余走代理. 刮削站点若被误判为直连,
-  # 可在面板里临时切到全局模式验证, 或在此处加规则
-  - GEOIP,CN,DIRECT
+  # 内网必须直连: mdcx 访问 Emby/Jellyfin 等内网服务时若走代理会绕道节点.
+  # 放在 MATCH 之前, 且加 no-resolve 避免对域名做不必要的 DNS 解析.
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,169.254.0.0/16,DIRECT,no-resolve
+  # 国内直连可选: 部分环境内核启动时下载 GEOIP MMDB 会失败, 需要时再打开.
+  # - GEOIP,CN,DIRECT
+  # 其余走代理
   - MATCH,节点选择

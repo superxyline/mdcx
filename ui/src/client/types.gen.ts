@@ -1774,6 +1774,11 @@ export type ScrapeStatus = {
      * 定时刮削的下次运行时间戳, 未开启时为 0
      */
     timed_next_run?: number;
+    /**
+     * Auth Enabled
+     * 服务端是否已设置 MDCX_API_KEY 启用接口认证
+     */
+    auth_enabled: boolean;
 };
 
 /**
@@ -1809,7 +1814,7 @@ export type SuffixSort = 'moword' | 'cnword' | 'definition';
 /**
  * Switch
  */
-export type Switch = 'auto_start' | 'auto_exit' | 'rest_scrape' | 'timed_scrape' | 'remain_task' | 'show_dialog_exit' | 'show_dialog_stop_scrape' | 'sort_del' | 'qt_dialog' | 'theporndb_no_hash' | 'hide_dock' | 'passthrough' | 'hide_menu' | 'dark_mode' | 'copy_netdisk_nfo' | 'show_logs' | 'hide_close' | 'hide_mini' | 'hide_none' | 'ipv4_only';
+export type Switch = 'auto_start' | 'auto_exit' | 'rest_scrape' | 'timed_scrape' | 'remain_task' | 'show_dialog_exit' | 'show_dialog_stop_scrape' | 'sort_del' | 'qt_dialog' | 'theporndb_no_hash' | 'hide_dock' | 'passthrough' | 'hide_menu' | 'dark_mode' | 'copy_netdisk_nfo' | 'show_logs' | 'hide_close' | 'hide_mini' | 'hide_none' | 'preview_confirm' | 'ipv4_only';
 
 /**
  * TagInclude

@@ -11,8 +11,10 @@ import {
   Lan,
   Menu,
   Settings,
+  ShieldOutlined,
 } from "@mui/icons-material";
 import {
+  Alert,
   Box,
   CssBaseline,
   Divider,
@@ -30,7 +32,8 @@ import {
   Typography,
 } from "@mui/material";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import { getScrapeStatus } from "@/client/sdk.gen";
 import { useTheme } from "@/hooks/useTheme";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
@@ -90,6 +93,28 @@ const createMenuItems = <
 export default function Layout({ children }: { children: ReactNode }) {
   const { mode, setMode } = useTheme();
   const [open, setOpen] = useState(true);
+  // 接口认证未开启时提示用户去设置 MDCX_API_KEY (auth_enabled 来自刮削状态接口)
+  const [authDisabled, setAuthDisabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // 模块加载时 apiKey.ts 已把 localStorage Key 注入 client;
+    // 这里不 throw, 401 交给根路由处理
+    getScrapeStatus()
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data as { auth_enabled?: boolean } | undefined;
+        if (data && data.auth_enabled === false) {
+          setAuthDisabled(true);
+        }
+      })
+      .catch(() => {
+        /* 认证已开启且 Key 未就绪时可能 401, 由根路由处理跳转 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleThemeChange = () => {
     const newMode = mode === "light" ? "dark" : mode === "dark" ? "system" : "light";
@@ -158,6 +183,24 @@ export default function Layout({ children }: { children: ReactNode }) {
       </Drawer>
       <Main>
         <DrawerHeader />
+        {authDisabled ? (
+          <Alert
+            severity="warning"
+            icon={<ShieldOutlined />}
+            sx={{ mb: 2 }}
+            action={
+              <IconButton color="inherit" size="small" component={Link} to="/settings" aria-label="去设置">
+                <Settings fontSize="inherit" />
+              </IconButton>
+            }
+          >
+            接口认证未开启：局域网内任意设备都可读写本机文件。请在 docker-compose 中设置{" "}
+            <Typography component="span" variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600 }}>
+              MDCX_API_KEY
+            </Typography>{" "}
+            后重启容器；设置说明见 设置 → 代理与网络。
+          </Alert>
+        ) : null}
         {children}
       </Main>
     </Box>

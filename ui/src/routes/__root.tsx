@@ -1,43 +1,54 @@
 import { createRootRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { useEffect, useState } from "react";
-import { client } from "@/client/client.gen";
-import { getWebSocketConnections } from "@/client/sdk.gen";
 import { AskDialog } from "@/components/AskDialog";
 import { WebSocketProvider } from "@/contexts/WebSocketProvider";
+import { applyApiKey, clearStoredApiKey, getStoredApiKey } from "@/lib/apiKey";
 import Layout from "../components/Layout";
 
 export const Route = createRootRoute({
   component: () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const apiKey = localStorage.getItem("apiKey");
+    // 每次渲染读取, 保证认证页保存 Key 后跳回时能拿到最新值
+    const apiKey = getStoredApiKey();
     const [isValidated, setIsValidated] = useState(false);
     const isAuthPage = location.pathname === "/auth";
 
     useEffect(() => {
       if (isAuthPage) {
+        applyApiKey(getStoredApiKey());
         return;
       }
-      // 服务端未设置 MDCX_API_KEY 时不启用认证, 此时浏览器里没有 Key 也能直接用,
-      // 因此这里不再要求本地已存在 Key: 先按当前凭据(可能为空)探测一次,
-      // 只有确实被服务端拒绝时才跳转到认证页.
-      client.setConfig({
-        baseURL: import.meta.env.PROD ? "" : import.meta.env.PUBLIC_DEV_API_URL,
-        auth: apiKey ?? undefined,
-      });
-      getWebSocketConnections()
+      // 服务端未设置 MDCX_API_KEY 时不启用认证, 此时浏览器里没有 Key 也能直接用.
+      // 必须 throwOnError, 否则 401 被当成成功, 校验形同虚设.
+      applyApiKey(apiKey);
+      let cancelled = false;
+      import("@/client/sdk.gen")
+        .then(({ getScrapeStatus }) => getScrapeStatus({ throwOnError: true }))
         .then(() => {
-          setIsValidated(true);
+          if (!cancelled) setIsValidated(true);
         })
-        .catch((e) => {
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          const status =
+            (e as { response?: { status?: number }; status?: number })?.response?.status ??
+            (e as { status?: number })?.status;
           console.error("连接校验失败:", e);
-          localStorage.removeItem("apiKey");
-          navigate({ to: "/auth", replace: true });
+          // 只有明确 401 才清 Key 并回认证页; 网络抖动不应把用户已保存的 Key 抹掉
+          if (status === 401) {
+            clearStoredApiKey();
+            applyApiKey(null);
+            navigate({ to: "/auth", replace: true });
+          } else {
+            setIsValidated(true);
+          }
         });
+      return () => {
+        cancelled = true;
+      };
     }, [apiKey, navigate, isAuthPage]);
 
-    console.log(`isValidated: ${isValidated}, isAuthPage: ${isAuthPage}`);
     if (isAuthPage) return <Outlet />;
 
     return (

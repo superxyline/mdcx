@@ -29,6 +29,7 @@ from ..models.enums import FileMode
 from ..models.flags import FileDoneDict, Flags
 from ..models.log_buffer import LogBuffer
 from ..models.types import CrawlersResult, FileInfo, OtherInfo, ScrapeResult, ShowData
+from ..server.failed_list import failed_list_store
 from ..server.var import is_server
 from ..signals import signal
 from ..tools.emby_actor_image import update_emby_actor_photo
@@ -66,6 +67,10 @@ if TYPE_CHECKING:
 class StopScrape(Exception): ...
 
 
+class SkipScrape(Exception):
+    """用户在预览确认中选择跳过该文件 (不计入失败, 不移动文件)."""
+
+
 class Scraper:
     def __init__(self, crawler_provider: "CrawlerProviderProtocol"):
         self.crawler_provider = crawler_provider
@@ -78,6 +83,8 @@ class Scraper:
 
     async def _run(self, file_mode: FileMode, movie_list: list[Path] | None) -> None:
         Flags.reset()
+        # 新一批刮削: 失败列表只属于本轮, 同步清掉跨重启恢复的旧列表
+        failed_list_store.clear()
         if movie_list is None:
             movie_list = []
         Flags.scrape_start_time = time.time()  # 开始刮削时间
@@ -301,12 +308,18 @@ class Scraper:
         # 获取刮削数据
         json_data = None
         other = None
+        skipped = False
         try:
             json_data, other = await self._process_one_file(file_info, file_mode)
             if json_data and other:
                 if manager.config.main_mode == 4:
                     number = json_data.number  # 读取模式且存在nfo时，可能会导致movie_number改变，需要更新
                 Flags.json_data_dic.update({number: ScrapeResult(file_info, json_data, other)})
+        except SkipScrape as skip_err:
+            skipped = True
+            reason = str(skip_err) or "用户跳过"
+            LogBuffer.log().write(f"\n ⏭ [Skipped] {reason}")
+            signal.show_log_text(f" ⏭ 跳过 {show_name}: {reason}")
         except Exception as e:
             self._check_stop(show_name)
             signal.show_traceback_log(traceback.format_exc())
@@ -316,45 +329,47 @@ class Scraper:
 
         # 显示刮削数据
         try:
-            show_data = ShowData.empty()
-            show_data.file_info = file_info
-            if json_data and other:
-                show_data.data = json_data
-                show_data.other = other
-                Flags.succ_count += 1
-                show_data.show_name = (
-                    str(Flags.count_claw)
-                    + "-"
-                    + str(Flags.succ_count)
-                    + "."
-                    + file_show_name.replace(number, file_info.number)
-                    + ("-" if file_info.definition else "")
-                    + file_info.definition
-                )
-                signal.show_list_name("succ", show_data, number)
-            else:
-                Flags.fail_count += 1
-                show_data.show_name = (
-                    str(Flags.count_claw)
-                    + "-"
-                    + str(Flags.fail_count)
-                    + "."
-                    + file_show_name.replace(number, file_info.number)
-                    + ("-" if file_info.definition else "")
-                    + file_info.definition
-                )
-                signal.show_list_name("fail", show_data, number)
-                if e := LogBuffer.error().get():
-                    LogBuffer.log().write(f"\n 🔴 [Failed] Reason: {e}")
-                    if "WinError 5" in e:
-                        LogBuffer.log().write(
-                            "\n 🔴 该问题为权限问题：请尝试以管理员身份运行，同时关闭其他正在运行的Python脚本！"
-                        )
-                failed_folder = get_movie_path_setting(file_path).failed_folder
-                fail_file_path = await move_file_to_failed_folder(failed_folder, file_path, folder_old_path)
-                Flags.failed_list.append((fail_file_path, LogBuffer.error().get()))
-                await self._failed_file_info_show(str(Flags.fail_count), fail_file_path, LogBuffer.error().get())
-                signal.view_failed_list_settext.emit(f"失败 {Flags.fail_count}")
+            if not skipped:
+                show_data = ShowData.empty()
+                show_data.file_info = file_info
+                if json_data and other:
+                    show_data.data = json_data
+                    show_data.other = other
+                    Flags.succ_count += 1
+                    show_data.show_name = (
+                        str(Flags.count_claw)
+                        + "-"
+                        + str(Flags.succ_count)
+                        + "."
+                        + file_show_name.replace(number, file_info.number)
+                        + ("-" if file_info.definition else "")
+                        + file_info.definition
+                    )
+                    signal.show_list_name("succ", show_data, number)
+                else:
+                    Flags.fail_count += 1
+                    show_data.show_name = (
+                        str(Flags.count_claw)
+                        + "-"
+                        + str(Flags.fail_count)
+                        + "."
+                        + file_show_name.replace(number, file_info.number)
+                        + ("-" if file_info.definition else "")
+                        + file_info.definition
+                    )
+                    signal.show_list_name("fail", show_data, number)
+                    if e := LogBuffer.error().get():
+                        LogBuffer.log().write(f"\n 🔴 [Failed] Reason: {e}")
+                        if "WinError 5" in e:
+                            LogBuffer.log().write(
+                                "\n 🔴 该问题为权限问题：请尝试以管理员身份运行，同时关闭其他正在运行的Python脚本！"
+                            )
+                    failed_folder = get_movie_path_setting(file_path).failed_folder
+                    fail_file_path = await move_file_to_failed_folder(failed_folder, file_path, folder_old_path)
+                    Flags.failed_list.append((fail_file_path, LogBuffer.error().get()))
+                    failed_list_store.save(Flags.failed_list)
+                    await self._failed_file_info_show(str(Flags.fail_count), fail_file_path, LogBuffer.error().get())
+                    signal.view_failed_list_settext.emit(f"失败 {Flags.fail_count}")
         except Exception as e:
             self._check_stop(show_name)
             signal.show_traceback_log(traceback.format_exc())
@@ -601,6 +616,10 @@ class Scraper:
         # 显示json_data内容
         show_movie_info(file_info, res)
 
+        # 刮削前预览确认: 识别成功后先让用户核对番号/封面, 再写入任何文件
+        if Switch.PREVIEW_CONFIRM in manager.config.switch_on:
+            await self._preview_confirm(file_info, res)
+
         # 生成输出文件夹和输出文件的路径
         (
             folder_new_path,
@@ -770,6 +789,46 @@ class Scraper:
             other.thumb_path = fanart_final_path
 
         return res, other
+
+    async def _preview_confirm(self, file_info: FileInfo, res: CrawlersResult) -> None:
+        """开关开启时阻塞等待用户确认; 确认全部 / 已选全部通过则直接放行.
+
+        超时或无人应答视为跳过, 避免在无人值守时误写文件.
+        """
+        if Flags.preview_approve_all:
+            return
+
+        cover = (res.thumb_list[0][0] if res.thumb_list else "") or res.thumb or ""
+        detail_lines = [
+            f"番号: {res.number or file_info.number}",
+            f"标题: {res.title or '(无)'}",
+            f"演员: {', '.join(res.actors or []) or '(无)'}",
+            f"日期: {res.release or '(无)'}",
+            f"文件: {file_info.file_show_path or file_info.file_path}",
+        ]
+        if res.outline:
+            outline = res.outline.replace("\n", " ").strip()
+            if len(outline) > 160:
+                outline = outline[:160] + "..."
+            detail_lines.append(f"简介: {outline}")
+
+        from ..server.ask import AskOption, ask_manager
+
+        reply = ask_manager.ask(
+            "刮削前预览确认",
+            [
+                AskOption("confirm", "确认写入", "primary"),
+                AskOption("confirm_all", "全部通过"),
+                AskOption("skip", "跳过此文件", "danger"),
+            ],
+            detail="\n".join(detail_lines),
+            image_url=cover,
+        )
+        if reply in (None, "skip"):
+            raise SkipScrape("预览确认中选择跳过" if reply == "skip" else "预览确认超时或无人应答")
+        if reply == "confirm_all":
+            Flags.preview_approve_all = True
+            signal.show_log_text(" ✅ 预览确认: 后续文件将全部自动通过")
 
     def _check_stop(self, show_name: str) -> None:
         if signal.stop:

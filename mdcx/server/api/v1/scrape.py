@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from mdcx.base.file import save_success_list
 from mdcx.models.flags import Flags
 from mdcx.server.api.v1.utils import check_path_access
-from mdcx.server.config import SAFE_DIRS
+from mdcx.server.config import API_KEY, SAFE_DIRS
 from mdcx.server.result_buffer import ResultItem, result_buffer
 from mdcx.server.scheduler import timed_scraper
 from mdcx.signals import signal
@@ -117,6 +117,7 @@ class ScrapeStatus(BaseModel):
     timed_next_run: float = Field(default=0, description="定时刮削的下次运行时间戳, 未开启时为 0")
     timed_interval_seconds: float = Field(default=0, description="定时刮削的间隔秒数")
     timed_last_run: float = Field(default=0, description="上次定时刮削触发的时间戳")
+    auth_enabled: bool = Field(description="服务端是否已设置 MDCX_API_KEY 启用接口认证")
 
 
 class ScrapeResultEntry(BaseModel):
@@ -218,6 +219,7 @@ async def get_scrape_status() -> ScrapeStatus:
         start_time=Flags.start_time,
         elapsed=round(elapsed, 2),
         remain=len(Flags.remain_list),
+        auth_enabled=bool(API_KEY),
         **timed_scraper.status(),
     )
 

@@ -445,6 +445,8 @@ class Switch(Enum):
     HIDE_CLOSE = "hide_close"
     HIDE_MINI = "hide_mini"
     HIDE_NONE = "hide_none"
+    # 刮削前预览确认: 识别出番号/封面后先弹窗确认再写文件
+    PREVIEW_CONFIRM = "preview_confirm"
     # deperated
     IPV4_ONLY = "ipv4_only"
 
@@ -470,6 +472,7 @@ class Switch(Enum):
             "Hide Close",
             "Hide Mini",
             "Hide None",
+            "刮削前预览确认",
         ]
 
 
