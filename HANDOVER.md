@@ -1,6 +1,6 @@
 # 项目交接文档
 
-> 最后更新：2026-09-19（深夜，会话结束交接）
+> 最后更新：2026-09-22
 > 用途：供新对话快速了解项目全貌，接续开发。**新对话请先通读本文件再动手。**
 
 ---
@@ -61,6 +61,8 @@
 | 完成通知 | 未配置（notify_type=none，用户没填 Bark/TG） |
 | emby_refresh | 关闭 |
 | wizard_done | true（向导已跳过，不会再弹） |
+| MDCX_API_KEY | **已启用**（2026-09-22），值见 `E:\codex\tools\mdcx_api_key.txt`；仓库 docker-compose 仍为空串，Key 只写在 NAS 上 |
+| clash 内网直连 | 已在 MATCH 前加 IP-CIDR 192.168/10/172.16/127/169.254 → DIRECT |
 
 ---
 
@@ -123,24 +125,34 @@
 
 ---
 
+## 五b、2026-09-22 会话（遗留项 1/2/3/7）
+
+1. **刮削前预览确认**：`Switch.PREVIEW_CONFIRM`（设置→高级→杂项→功能开关）。识别完成、写文件前 AskDialog 弹「确认写入 / 全部通过 / 跳过此文件」，带封面 `image_url`；跳过抛 `SkipScrape`（不计失败、不移文件）；超时视为跳过。
+2. **访问密码**：`GET /scrape/status` 新增 `auth_enabled`；未开认证时顶栏黄条引导；设置→代理与网络有说明。NAS 已启用 Key（见「二」）。
+3. **失败列表跨重启**：`mdcx/server/failed_list.py` ↔ `/data/failed_list.json`；启动加载；append 落盘；新一批 `Flags.reset` 清空内存+磁盘。
+4. **Clash 内网直连**：模板与 NAS 均在 MATCH 前加内网 IP-CIDR DIRECT；clash 已重启。
+5. **认证误踢循环修复**（2026-09-22 晚）：首页封面走裸 axios 请求漏带 X-API-KEY → 401 →
+   App.tsx 全局拦截器误判 Key 失效清 localStorage 踢回 /auth，用户无限重填 Key。
+   修复：`lib/apiKey.ts` 新增 `authHeaders()`，ResultDetail/PosterCutter 两处裸请求手动带头；
+   拦截器改为**只有请求确实带了 Key 还 401 才清 Key 踢页**。已部署 NAS 并浏览器实测通过。
+6. **媒体库挂载错位修复**（2026-09-22 晚）：NAS compose 曾被改成 `./media:/media`（指向空目录），
+   导致容器内 `/media/整理完成/...` 全部 404、首页封面变占位图。真实媒体库在
+   **`<私密媒体库路径>/`**（下含 待刮削/整理完成/刮削失败，与 config 三路径一一对应）。
+   已改回 `- <私密媒体库路径>:/media` 并 up -d；config 三路径**未动**（红线）。
+   ⚠️ 部署时 tar 包不含 docker-compose.yml，但**别拿仓库模板覆盖 NAS 上的 compose**——
+   挂载行是 NAS 专属的。改前备份：`/home/Aadmin/docker-compose.yml.bak-0922-2129`。
+   浏览器实测：3 张历史封面全部恢复真实图片（blob 200）。
+
+本地验证：`uv run pytest` 69 passed / ruff 通过 / `pnpm run ci` 通过 / 前端已 build。NAS：无 Key→401，带 Key→`auth_enabled=true`，容器 Up。
+
+---
+
 ## 六、遗留事项（按优先级）
 
-1. **刮削前预览确认**：识别后先展示番号/封面让用户确认再写文件（防误刮，交互改动较大）。
-2. **媒体库浏览页**：按演员/系列/日期浏览已刮影片的墙页（数据在 NFO 里），点开复用结果详情弹窗。
-3. **硬链接整理模式**：现有软链接在源路径变化时断，硬链接更适合单独挂媒体服务器的场景。
-4. **访问密码引导**：接口认证目前关闭（MDCX_API_KEY=""），局域网内任何设备可读写文件；
-   认证页代码已有（/auth），只差引导用户设置 Key。
-5. **失败记录跨重启**：Flags.failed_list 只存本轮（内存），重启后「重试失败」不可用；
-   可考虑把失败列表也持久化。
-6. **Clash 内网直连规则**：`clash/config.yaml` 规则是 `MATCH,节点选择`，mdcx 走代理后访问
-   内网 Emby 会绕道节点。需要在 rules 的 MATCH 前加：
-   ```yaml
-   - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
-   - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
-   - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
-   ```
-   （GEOIP,CN,DIRECT 会导致内核启动时下载 MMDB 失败，所以没加。）
-7. 单文件刮削接口必须传 URL，小白不友好——可做成"自动猜站点"。
+1. **媒体库浏览页**：按演员/系列/日期浏览已刮影片的墙页（数据在 NFO 里），点开复用结果详情弹窗。
+2. **硬链接整理模式**：现有软链接在源路径变化时断，硬链接更适合单独挂媒体服务器的场景。
+3. 单文件刮削接口必须传 URL，小白不友好——可做成"自动猜站点"。
+4. ~~刮削前预览确认~~ / ~~访问密码引导~~ / ~~失败记录跨重启~~ / ~~Clash 内网直连~~（2026-09-22 已完成）
 
 ---
 

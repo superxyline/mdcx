@@ -125,9 +125,129 @@ http://clash:7890
 **JAVDB Cookie(可选)**。JAVDB 是很优质的源, 但需要登录 Cookie。
 不配也能正常刮削, 只是少一路数据来源。
 
-## 部署到 NAS 的完整说明
+## 部署到 NAS(详细教程)
 
-包含媒体库挂载、Clash 代理编排、面板配置、常见报错处理:
+适用任何带 Docker 的 Linux NAS(飞牛 fnOS / 群晖 / 威联通 / 自建),以 Docker Compose 方式部署并支持后续升级。Clash 代理编排与面板配置细节另见 [docker/README.md](docker/README.md)。
+
+### 第 0 步:准备好媒体库目录
+
+先在 NAS 上按下面的结构组织媒体库(名称可以自定,但三个目录建议齐全):
+
+```
+/你的媒体库/
+├── 待刮削/      ← 把待处理的片子放进这里
+├── 整理完成/    ← 刮削成功后的成品(含封面、NFO)移动到这里
+└── 刮削失败/    ← 刮不动的片子移动到这里
+```
+
+例:飞牛上建在 `/vol1/1000/影视/`。
+
+### 第 1 步:获取代码
+
+```bash
+git clone https://github.com/superxyline/mdcx.git
+cd mdcx
+```
+
+(国内网络可先配置 GitHub 加速镜像再 clone。)
+
+### 第 2 步:改 docker-compose.yml —— 唯一必改的一处
+
+打开 `docker-compose.yml`,把 `volumes` 里挂载行的**左边**改成你的媒体库真实路径,**右边保持 `/media` 不动**:
+
+```yaml
+services:
+  mdcx:
+    volumes:
+      - ./data:/data                        # 应用数据(config/历史记录), 保持原样
+      - /vol1/1000/影视:/media              # ← 只改左边, 右边必须是 /media
+```
+
+> ⚠️ **容器内所有路径都以 `/media` 开头**:应用设置里的「媒体路径」是
+> `/media/待刮削`、`整理完成`、`刮削失败`,它们对应上面挂载点下的子目录。
+> **不要**在设置页把它们改成宿主机路径(`/vol1/...`),容器里不存在那些路径,
+> 改了会导致封面 404、文件移动失败。
+>
+> ⚠️ **升级时千万不要用仓库里的 docker-compose.yml 覆盖 NAS 上已有的这份** ——
+> 挂载行是每台 NAS 各自的本地配置,覆盖后容器会指向错误目录(表现为
+> 历史记录封面全部变占位图)。
+
+### 第 3 步:(强烈建议)设置接口访问密码
+
+不设置 `MDCX_API_KEY` 时接口**完全无认证**,局域网内任何设备都能读写你 NAS 上的文件。
+在 `docker-compose.yml` 的 `mdcx` 服务 `environment` 里加上:
+
+```yaml
+    environment:
+      MDCX_API_KEY: "换成一串随机字符"      # 浏览器访问时输入这串 Key
+      MDCX_SAFE_DIRS: "/media"              # 允许被文件接口访问的目录, 默认只有用户主目录
+```
+
+随机 Key 可以这样生成:`openssl rand -base64 32 | tr -d '/+=' | head -c 48`。
+
+### 第 4 步:启动
+
+```bash
+mkdir -p data
+sudo docker compose up -d --build
+```
+
+首次构建会编译前端 + 安装 Python 依赖,大约需要 3 分钟。
+
+### 第 5 步:验证
+
+```bash
+# 服务状态(设置过 Key 就带上, 返回 JSON 且含 "auth_enabled":true 即正常)
+curl -H "X-API-KEY: 你的Key" http://NAS地址:8000/api/v1/scrape/status
+
+# 看日志
+sudo docker compose logs -f mdcx
+```
+
+浏览器打开 `http://NAS地址:8000`:
+
+1. 设置过 Key 的会先跳到认证页,输入 Key 进入(只需输一次,保存在浏览器本地);
+2. 进「设置 - 常用」确认媒体路径为 `/media/待刮削` 等三项;
+3. 把片子丢进 `<媒体库>/待刮削/`,首页点「开始刮削」;
+4. 成品出现在 `<媒体库>/整理完成/`,首页「导入历史」可以把旧记录回填进结果列表。
+
+### 第 6 步(后续升级):同步源码重建容器
+
+改了代码/拉了新版本后,不用重来,四步升级:
+
+```bash
+# 1) 本地打包源码(排除依赖与数据)
+cd mdcx
+tar czf mdcx-src.tar.gz --exclude='ui/node_modules' --exclude='ui/dist' \
+  --exclude='__pycache__' --exclude='.git' --exclude='userdata' \
+  --exclude='*.egg-info' --exclude='.ruff_cache' --exclude='.pytest_cache' \
+  --exclude='media' mdcx ui resources docker server.py pyproject.toml uv.lock
+
+# 2) 上传到 NAS(用共享目录 / scp / U盘 均可), 注意: 不要覆盖 NAS 上的 docker-compose.yml
+
+# 3) NAS 上备份后解压覆盖
+cd /部署目录
+tar czf ~/mdcx-backup.tar.gz mdcx docker-compose.yml    # 先备份
+tar xzf ~/mdcx-src.tar.gz -C ./
+
+# 4) 重建容器(约 3 分钟), 完成后按第 5 步验证
+sudo docker compose up -d --build
+```
+
+`data/` 目录是配置与历史数据,上面的打包命令不会碰它,升级不影响已有配置。
+
+### 常见问题
+
+| 现象 | 原因与处理 |
+|---|---|
+| 历史记录封面全是占位图(接口 404) | 容器 `/media` 挂载指错了目录,回到第 2 步检查挂载行 |
+| 每次进首页都被要求重填 Key | 旧版缺陷(2026-09-22 已修复),拉最新代码重新部署 |
+| 打开页面一直转圈/接口超时 | 看 `docker compose logs mdcx`;网络问题先开代理(见下) |
+| 刮削源访问失败 | 在 设置 → 代理与网络 配代理,用仓库自带 Clash 时填 `http://clash:7890`,**不能填 127.0.0.1** |
+| 容器内路径报错/文件找不到 | 容器视角只有 `/media/...`,设置页不要填宿主机路径 |
+| Windows Git Bash 下 curl 报路径 403 | MSYS 会把 `/media/...` 改写成本地路径,加 `MSYS_NO_PATHCONV=1` 再执行 |
+
+其他 Clash 代理编排与面板配置:
 
 👉 [docker/README.md](docker/README.md)
 
