@@ -29,6 +29,7 @@ import { client } from "@/client/client.gen";
 import { cutPoster, getPosterInfo } from "@/client/sdk.gen";
 import type { PosterInfo } from "@/client/types.gen";
 import { useToast } from "@/contexts/ToastProvider";
+import { authHeaders } from "@/lib/apiKey";
 
 /** 桌面版裁剪框的默认高宽比 536.6/379. */
 const DEFAULT_RATIO = 1.42;
@@ -97,6 +98,11 @@ export function PosterCutter({ open, onClose, initialPath }: PosterCutterProps) 
       setInfo(data);
 
       const img = await client.instance.get("/api/v1/tools/poster/image", {
+        // 裸 axios 实例不读取 setConfig 设置的 baseURL, 必须显式传入,
+        // 否则会落到生成代码里的 http://localhost:8000, 其它设备访问时取不到图
+        baseURL: client.getConfig().baseURL ?? "",
+        // 裸调用不经过 hey-api 的 security 注入, Key 必须手动带头
+        headers: authHeaders(),
         params: { path: data.path },
         responseType: "blob",
       });

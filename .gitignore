@@ -21,8 +21,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# 注意: 必须带前导 / 只匹配仓库根目录, 否则会误伤 ui/src/lib/ (曾导致 apiKey.ts 漏提交)
+/lib/
+/lib64/
 parts/
 sdist/
 var/

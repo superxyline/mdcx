@@ -15,6 +15,7 @@ import {
 import { Link as RouterLink } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { client } from "@/client/client.gen";
+import { authHeaders } from "@/lib/apiKey";
 import type { ScrapeListItem } from "@/store/scrapeStore";
 
 /**
@@ -37,6 +38,11 @@ function useImageBlobUrl(path: string | undefined) {
     (async () => {
       try {
         const res = await client.instance.get("/api/v1/tools/poster/image", {
+          // 裸 axios 实例不读取 setConfig 设置的 baseURL, 必须显式传入,
+          // 否则会落到生成代码里的 http://localhost:8000, 其它设备访问时取不到图
+          baseURL: client.getConfig().baseURL ?? "",
+          // 裸调用不经过 hey-api 的 security 注入, Key 必须手动带头
+          headers: authHeaders(),
           params: { path },
           responseType: "blob",
         });

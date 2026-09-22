@@ -35,7 +35,12 @@ client.setConfig({
 client.instance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // 只有确实带了 Key 还被 401 才认定凭据失效; 请求本身漏带头的 401 是客户端
+    // 问题, 若也清 Key 会把用户踢回认证页陷入无限重填 (封面图曾因此循环).
+    const headers = error.config?.headers;
+    const sentKey =
+      (typeof headers?.get === "function" ? headers.get("X-API-KEY") : undefined) ?? headers?.["X-API-KEY"];
+    if (error.response?.status === 401 && sentKey) {
       localStorage.removeItem("apiKey");
       router.navigate({ to: "/auth" });
     }
