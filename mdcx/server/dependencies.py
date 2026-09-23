@@ -22,6 +22,17 @@ class APIKeyHeader(APIKeyBase):
         api_key = request.headers.get(self.model.name)
         if api_key == API_KEY:
             return api_key
+        # metacubexd 面板(9090 端口)跨端口调用 /api/v1/network/* 时以 mihomo 自己的
+        # 面板 secret 认证: 面板页面天然持有该值, 不必再让用户在面板里输入 MDCX 的 Key.
+        # 范围严格限定在 network 路径, 其余接口仍然只认 X-API-KEY.
+        if request.url.path.startswith("/api/v1/network/"):
+            supplied = request.headers.get("X-Panel-Secret")
+            if supplied:
+                from .api.v1.network import read_panel_secret  # 局部导入避免环依赖
+
+                panel_secret = read_panel_secret()
+                if panel_secret and supplied == panel_secret:
+                    return supplied
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API Key")
 
 

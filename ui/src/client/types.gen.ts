@@ -45,6 +45,67 @@ export type BackfillResponse = {
 export type CdChar = 'letter' | 'endc' | 'digital' | 'middle_number' | 'underline' | 'space' | 'point';
 
 /**
+ * ClashStatus
+ */
+export type ClashStatus = {
+    /**
+     * Config Available
+     * 容器内能否读到 clash/config.yaml
+     */
+    config_available: boolean;
+    /**
+     * Provider Name
+     * proxy-providers 下的订阅源名称
+     */
+    provider_name?: string | null;
+    /**
+     * Subscription Url
+     * 当前订阅地址
+     */
+    subscription_url?: string | null;
+    /**
+     * Update Interval Hours
+     * 自动更新间隔(小时)
+     */
+    update_interval_hours?: number | null;
+    /**
+     * Panel Secret
+     * 面板(9090)登录密码
+     */
+    panel_secret?: string | null;
+    /**
+     * Kernel Reachable
+     * 能否连上 mihomo 内核
+     */
+    kernel_reachable: boolean;
+    /**
+     * Kernel Version
+     * 内核版本
+     */
+    kernel_version?: string | null;
+    /**
+     * Kernel Error
+     * 内核连接/认证失败原因
+     */
+    kernel_error?: string | null;
+    /**
+     * Provider Updated At
+     * 订阅上次成功更新时间
+     */
+    provider_updated_at?: string | null;
+    /**
+     * Provider Proxies Count
+     * 订阅当前提供的节点数
+     */
+    provider_proxies_count?: number | null;
+    /**
+     * Provider Error
+     * 订阅加载失败原因
+     */
+    provider_error?: string | null;
+};
+
+/**
  * CleanAction
  */
 export type CleanAction = 'clean_ext' | 'clean_name' | 'clean_contains' | 'clean_size' | 'clean_ignore_ext' | 'clean_ignore_contains' | 'i_know' | 'i_agree' | 'auto_clean';
@@ -1775,6 +1836,16 @@ export type ScrapeStatus = {
      */
     timed_next_run?: number;
     /**
+     * Timed Interval Seconds
+     * 定时刮削的间隔秒数
+     */
+    timed_interval_seconds?: number;
+    /**
+     * Timed Last Run
+     * 上次定时刮削触发的时间戳
+     */
+    timed_last_run?: number;
+    /**
      * Auth Enabled
      * 服务端是否已设置 MDCX_API_KEY 启用接口认证
      */
@@ -1804,6 +1875,22 @@ export type SiteConfig = {
      * 自定义网址
      */
     custom_url?: string | null;
+};
+
+/**
+ * SubscriptionUpdate
+ */
+export type SubscriptionUpdate = {
+    /**
+     * Url
+     * 订阅地址(http/https)
+     */
+    url: string;
+    /**
+     * Update Interval Hours
+     * 自动更新间隔(小时)
+     */
+    update_interval_hours?: number;
 };
 
 /**
@@ -2879,6 +2966,47 @@ export type CutPosterResponses = {
 };
 
 export type CutPosterResponse = CutPosterResponses[keyof CutPosterResponses];
+
+export type GetClashStatusApiV1NetworkClashGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/network/clash';
+};
+
+export type GetClashStatusApiV1NetworkClashGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ClashStatus;
+};
+
+export type GetClashStatusApiV1NetworkClashGetResponse = GetClashStatusApiV1NetworkClashGetResponses[keyof GetClashStatusApiV1NetworkClashGetResponses];
+
+export type UpdateSubscriptionApiV1NetworkClashSubscriptionPutData = {
+    body: SubscriptionUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/network/clash/subscription';
+};
+
+export type UpdateSubscriptionApiV1NetworkClashSubscriptionPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateSubscriptionApiV1NetworkClashSubscriptionPutError = UpdateSubscriptionApiV1NetworkClashSubscriptionPutErrors[keyof UpdateSubscriptionApiV1NetworkClashSubscriptionPutErrors];
+
+export type UpdateSubscriptionApiV1NetworkClashSubscriptionPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: ClashStatus;
+};
+
+export type UpdateSubscriptionApiV1NetworkClashSubscriptionPutResponse = UpdateSubscriptionApiV1NetworkClashSubscriptionPutResponses[keyof UpdateSubscriptionApiV1NetworkClashSubscriptionPutResponses];
 
 export type ClientOptions = {
     baseURL: 'http://localhost:8000' | (string & {});

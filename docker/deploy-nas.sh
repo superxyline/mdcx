@@ -118,7 +118,7 @@ if $COMPOSE ps | grep -q "Up"; then
     echo "  Clash 面板: http://${NAS_IP:-<NAS_IP>}:9090/ui  (密码见 clash/config.yaml 的 secret)"
     echo
     echo "  下一步: 打开 mdcx 界面, 进入「设置 → 网络」,"
-    echo "          把代理地址填成 http://clash:7890 并打开代理开关,"
+    echo "          把代理地址填成 http://mdcx-clash:7890 并打开代理开关,"
     echo "          否则刮削不会走代理。"
     echo
     echo "  常用命令:"

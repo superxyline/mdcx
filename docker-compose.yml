@@ -24,6 +24,8 @@ services:
       # 群晖示例:  - /volume1/video:/media
       # 威联通示例: - /share/video:/media
       - ./media:/media
+      # Clash 配置目录: 网络页的「订阅设置」通过它读写 config.yaml, 不用手工改文件
+      - ./clash:/clash-config
     depends_on:
       - clash
 

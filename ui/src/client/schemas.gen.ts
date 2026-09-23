@@ -54,6 +54,132 @@ export const CDCharSchema = {
     showNames: ['除C以外的字母', 'C结尾也视为分集而非字幕', '末尾两位数字', '不在结尾的数字', '分集分隔符: 下划线', '分集分隔符: 空格', '分集分隔符: 英文句号']
 } as const;
 
+export const ClashStatusSchema = {
+    properties: {
+        config_available: {
+            type: 'boolean',
+            title: 'Config Available',
+            description: '容器内能否读到 clash/config.yaml'
+        },
+        provider_name: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Provider Name',
+            description: 'proxy-providers 下的订阅源名称'
+        },
+        subscription_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Subscription Url',
+            description: '当前订阅地址'
+        },
+        update_interval_hours: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Update Interval Hours',
+            description: '自动更新间隔(小时)'
+        },
+        panel_secret: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Panel Secret',
+            description: '面板(9090)登录密码'
+        },
+        kernel_reachable: {
+            type: 'boolean',
+            title: 'Kernel Reachable',
+            description: '能否连上 mihomo 内核'
+        },
+        kernel_version: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Kernel Version',
+            description: '内核版本'
+        },
+        kernel_error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Kernel Error',
+            description: '内核连接/认证失败原因'
+        },
+        provider_updated_at: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Provider Updated At',
+            description: '订阅上次成功更新时间'
+        },
+        provider_proxies_count: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Provider Proxies Count',
+            description: '订阅当前提供的节点数'
+        },
+        provider_error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Provider Error',
+            description: '订阅加载失败原因'
+        }
+    },
+    type: 'object',
+    required: ['config_available', 'kernel_reachable'],
+    title: 'ClashStatus'
+} as const;
+
 export const CleanActionSchema = {
     type: 'string',
     enum: ['clean_ext', 'clean_name', 'clean_contains', 'clean_size', 'clean_ignore_ext', 'clean_ignore_contains', 'i_know', 'i_agree', 'auto_clean'],
@@ -70,7 +196,7 @@ export const Config_InputSchema = {
             default: '/media',
             uiSchema: {
                 customProps: {
-                    initialPath: 'E:/codex/mdcx/media',
+                    initialPath: 'C:/Users/13017',
                     multiple: false,
                     type: 'directory'
                 },
@@ -968,7 +1094,7 @@ export const Config_OutputSchema = {
             default: '/media',
             uiSchema: {
                 customProps: {
-                    initialPath: 'E:/codex/mdcx/media',
+                    initialPath: 'C:/Users/13017',
                     multiple: false,
                     type: 'directory'
                 },
@@ -2483,10 +2609,27 @@ export const ScrapeStatusSchema = {
             title: 'Timed Next Run',
             description: '定时刮削的下次运行时间戳, 未开启时为 0',
             default: 0
+        },
+        timed_interval_seconds: {
+            type: 'number',
+            title: 'Timed Interval Seconds',
+            description: '定时刮削的间隔秒数',
+            default: 0
+        },
+        timed_last_run: {
+            type: 'number',
+            title: 'Timed Last Run',
+            description: '上次定时刮削触发的时间戳',
+            default: 0
+        },
+        auth_enabled: {
+            type: 'boolean',
+            title: 'Auth Enabled',
+            description: '服务端是否已设置 MDCX_API_KEY 启用接口认证'
         }
     },
     type: 'object',
-    required: ['running', 'file_mode', 'total', 'started', 'done', 'success', 'failed', 'progress', 'start_time', 'elapsed', 'remain'],
+    required: ['running', 'file_mode', 'total', 'started', 'done', 'success', 'failed', 'progress', 'start_time', 'elapsed', 'remain', 'auth_enabled'],
     title: 'ScrapeStatus',
     description: '当前刮削状态快照.'
 } as const;
@@ -2535,6 +2678,27 @@ export const SiteConfigSchema = {
     title: 'SiteConfig'
 } as const;
 
+export const SubscriptionUpdateSchema = {
+    properties: {
+        url: {
+            type: 'string',
+            title: 'Url',
+            description: '订阅地址(http/https)'
+        },
+        update_interval_hours: {
+            type: 'number',
+            maximum: 720,
+            exclusiveMinimum: 0,
+            title: 'Update Interval Hours',
+            description: '自动更新间隔(小时)',
+            default: 1
+        }
+    },
+    type: 'object',
+    required: ['url'],
+    title: 'SubscriptionUpdate'
+} as const;
+
 export const SuffixSortSchema = {
     type: 'string',
     enum: ['moword', 'cnword', 'definition'],
@@ -2544,9 +2708,9 @@ export const SuffixSortSchema = {
 
 export const SwitchSchema = {
     type: 'string',
-    enum: ['auto_start', 'auto_exit', 'rest_scrape', 'timed_scrape', 'remain_task', 'show_dialog_exit', 'show_dialog_stop_scrape', 'sort_del', 'qt_dialog', 'theporndb_no_hash', 'hide_dock', 'passthrough', 'hide_menu', 'dark_mode', 'copy_netdisk_nfo', 'show_logs', 'hide_close', 'hide_mini', 'hide_none', 'ipv4_only'],
+    enum: ['auto_start', 'auto_exit', 'rest_scrape', 'timed_scrape', 'remain_task', 'show_dialog_exit', 'show_dialog_stop_scrape', 'sort_del', 'qt_dialog', 'theporndb_no_hash', 'hide_dock', 'passthrough', 'hide_menu', 'dark_mode', 'copy_netdisk_nfo', 'show_logs', 'hide_close', 'hide_mini', 'hide_none', 'preview_confirm', 'ipv4_only'],
     title: 'Switch',
-    showNames: ['自动开始', '自动退出', 'Rest Scrape', 'Timed Scrape', 'Remain Task', 'Show Dialog Exit', 'Show Dialog Stop Scrape', 'Sort Del', 'Qt Dialog', 'Theporndb No Hash', 'Hide Dock', 'Passthrough', 'Hide Menu', 'Dark Mode', 'Copy Netdisk Nfo', 'Show Logs', 'Hide Close', 'Hide Mini', 'Hide None']
+    showNames: ['自动开始', '自动退出', 'Rest Scrape', 'Timed Scrape', 'Remain Task', 'Show Dialog Exit', 'Show Dialog Stop Scrape', 'Sort Del', 'Qt Dialog', 'Theporndb No Hash', 'Hide Dock', 'Passthrough', 'Hide Menu', 'Dark Mode', 'Copy Netdisk Nfo', 'Show Logs', 'Hide Close', 'Hide Mini', 'Hide None', '刮削前预览确认']
 } as const;
 
 export const TagIncludeSchema = {
