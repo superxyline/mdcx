@@ -1,0 +1,33 @@
+#!/bin/bash
+# 安装完成后: 建数据目录结构, 写入默认 env 与媒体映射模板(已存在则不覆盖)
+set -u
+mkdir -p "${TRIM_PKGVAR}/userdata" "${TRIM_PKGVAR}/clash"
+
+if [ ! -f "${TRIM_PKGVAR}/env" ]; then
+    cat > "${TRIM_PKGVAR}/env" <<ENVEOF
+# MDCx 服务环境(与 Docker 版 compose environment 等价), 改完在应用中心重启生效
+MDCX_HOST=0.0.0.0
+MDCX_PORT=8000
+# 接口访问密码: 留空=不校验(仅建议内网使用)
+MDCX_API_KEY=
+# 允许被文件接口访问的目录(容器时代是 /media)
+MDCX_SAFE_DIRS=/media
+# 原生环境的 Clash 位置(容器里的默认是 /clash-config 挂载与 mdcx-clash 容器名)
+MDCX_CLASH_CONFIG_DIR=${TRIM_PKGVAR}/clash
+MDCX_CLASH_API=http://127.0.0.1:9090
+TZ=Asia/Shanghai
+ENVEOF
+fi
+
+if [ ! -f "${TRIM_PKGVAR}/media-bind.conf" ]; then
+    cat > "${TRIM_PKGVAR}/media-bind.conf" <<'MFEOF'
+# 媒体路径映射: 每行 "<宿主真实路径> <容器时代路径>", # 开头为注释
+# 应用每次启动时按此表 mount --bind, 使 config.json 里 /media/xxx 的
+# 容器时代路径在宿主直接可用 —— 因此 config.json 无需做任何修改.
+# 示例(把左边换成你的媒体库真实路径):
+# /vol1/1000/影视/待刮削 /media/待刮削
+# /vol1/1000/影视/整理完成 /media/整理完成
+# /vol1/1000/影视/刮削失败 /media/刮削失败
+MFEOF
+fi
+exit 0

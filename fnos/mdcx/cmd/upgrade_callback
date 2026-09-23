@@ -1,0 +1,7 @@
+#!/bin/bash
+# 升级后: 补齐新目录结构, 绝不覆盖用户已有 env / 媒体映射 / 数据
+set -u
+mkdir -p "${TRIM_PKGVAR}/userdata" "${TRIM_PKGVAR}/clash"
+# 复用安装期初始化(幂等: 文件已存在时不写)
+bash "${TRIM_PKGMETA}/cmd/install_callback" 2>/dev/null || true
+exit 0

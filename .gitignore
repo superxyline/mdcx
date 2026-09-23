@@ -182,3 +182,7 @@ Log/
 # dev files
 dev/
 *.ipynb
+# FPK 打包产物与运行时大二进制(用 fnos/fetch-binaries.sh 获取, 打包前执行)
+fnos/*.fpk
+fnos/mdcx/app/runtime/uv
+fnos/mdcx/app/clash-runtime/mihomo

@@ -1,0 +1,52 @@
+[tool.setuptools]
+py-modules = ['mdcx', 'scripts']
+
+[project]
+name = "mdcx"
+version = "2.0.0"
+description = "mdcx"
+readme = "README.md"
+requires-python = ">=3.13.4" # we need os.path.ALLOW_MISSING
+dependencies = [
+    "aiofiles==24.1.0",
+    "aiolimiter==1.2.1",
+    "av>=15.0.0",
+    "beautifulsoup4==4.13.4",
+    "curl-cffi==0.11.4",
+    "httpx[socks]>=0.28.1",
+    "lxml==5.4.0",
+    "openai==1.91.0",
+    "oshash==0.1.1",
+    "parsel>=1.10.0",
+    "patchright>=1.52.5",
+    "pillow==11.3.0",
+    "ping3==4.0.4",
+    "pydantic-settings>=2.10.1",
+    "zhconv==1.4.3",
+]
+
+[project.scripts]
+crawl = "mdcx.cmd.crawl:app"
+gen_enums = "mdcx.cmd.gen_enums:main"
+bump = "scripts.bump:app"
+changelog = "scripts.changelog:app"
+
+[project.optional-dependencies]
+web = ["fastapi>=0.116.1", "uvicorn[standard]>=0.35.0"]
+
+[dependency-groups]
+dev = [
+    "fastapi-cli>=0.0.8",
+    "ipykernel>=6.30.1",
+    "pre-commit>=4.2.0",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+    "pytest-cov>=6.2.1",
+    "rich>=14.1.0",
+    "ruff>=0.12.5",
+    "typer>=0.16.0",
+    "types-lxml>=2025.3.30",
+]
+
+[tool.uv]
+package = true

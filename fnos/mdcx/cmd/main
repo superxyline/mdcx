@@ -1,0 +1,280 @@
+#!/bin/bash
+# MDCx fnOS 生命周期入口: start / stop / status
+#
+# 职责链(全部幂等):
+#   1. bind mount 真实媒体库到 /media/* —— 让 config.json 里容器时代的
+#      /media/待刮削 等路径在宿主直接可用, 用户配置一个字都不用改
+#   2. 写 MDCx.config 标记(数据目录定位, 同容器 entrypoint 约定)
+#   3. uv sync 建 Python3.13 环境(venv 落在数据目录, 持久保留)
+#   4. 拉起内嵌 mihomo(首启从 app/clash-runtime 拷贝)与 uvicorn 主服务
+
+LOG_FILE="${TRIM_PKGVAR}/service.log"
+PID_FILE="${TRIM_PKGVAR}/app.pid"        # 主服务(uvicorn)
+CLASH_PID="${TRIM_PKGVAR}/clash.pid"
+ENV_FILE="${TRIM_PKGVAR}/env"
+MEDIA_MAP="${TRIM_PKGVAR}/media-bind.conf"
+VENV_DIR="${TRIM_PKGVAR}/.venv"
+CLASH_DIR="${TRIM_PKGVAR}/clash"
+UV_BIN="${TRIM_APPDEST}/runtime/uv"
+LOCK_HASH_FILE="${TRIM_PKGVAR}/.deps.sha256"
+
+log_msg() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}"
+}
+
+fail_msg() {
+    # 写给用户的可见错误(应用中心会弹出)
+    echo "$1" > "${TRIM_TEMP_LOGFILE}"
+    log_msg "ERROR: $1"
+}
+
+check_process() {
+    kill -0 "$1" 2>/dev/null
+}
+
+# 把飞牛"授权目录"(TRIM_DATA_ACCESSIBLE_PATHS, 冒号分隔的真实路径)
+# 并入文件白名单 MDCX_SAFE_DIRS(逗号分隔! python 侧按 split(",") 解析)
+# —— 设置页的文件选择器即可按真实路径与真实名字浏览已授权文件夹,
+# 与飞牛文件管理一致. 仅原生版使用; docker 版维持 compose 环境变量原样.
+# 用法: merge_safe_dirs "<基础白名单,逗号分隔>" "<授权路径,冒号分隔>"
+merge_safe_dirs() {
+    local out="" d
+    local -a items=()
+    if [ -n "$1" ]; then
+        IFS=',' read -ra items <<< "$1"
+        for d in "${items[@]}"; do
+            [ -n "$d" ] || continue
+            out="${out:+${out},}${d}"
+        done
+    fi
+    items=()
+    if [ -n "$2" ]; then
+        IFS=':' read -ra items <<< "$2"
+        for d in "${items[@]}"; do
+            [ -n "$d" ] || continue
+            case ",${out}," in
+                *",${d},"*) ;;
+                *) out="${out:+${out},}${d}" ;;
+            esac
+        done
+    fi
+    printf '%s' "$out"
+}
+
+# ---------------------------------------------------------------- 媒体路径
+# media-bind.conf 每行: <宿主真实路径> <容器时代路径>, 以 # 开头为注释
+bind_media() {
+    [ -f "${MEDIA_MAP}" ] || return 0
+    while read -r src dst _extra; do
+        case "${src}" in ''|\#*) continue ;; esac
+        [ -n "${dst}" ] || continue
+        if [ ! -d "${src}" ]; then
+            log_msg "WARN: bind 源不存在, 跳过: ${src}"
+            continue
+        fi
+        mkdir -p "${dst}" 2>/dev/null
+        if command -v mountpoint >/dev/null 2>&1 && mountpoint -q "${dst}" 2>/dev/null; then
+            continue
+        fi
+        if mount --bind "${src}" "${dst}" 2>> "${LOG_FILE}"; then
+            log_msg "bind: ${src} -> ${dst}"
+        else
+            log_msg "WARN: bind 失败(需要 root): ${src} -> ${dst}"
+        fi
+    done < "${MEDIA_MAP}"
+}
+
+unbind_media() {
+    [ -f "${MEDIA_MAP}" ] || return 0
+    while read -r _src dst _extra; do
+        case "${_src}" in ''|\#*) continue ;; esac
+        [ -n "${dst}" ] || continue
+        if command -v mountpoint >/dev/null 2>&1 && mountpoint -q "${dst}" 2>/dev/null; then
+            umount "${dst}" 2>> "${LOG_FILE}" && log_msg "unbind: ${dst}"
+        fi
+    done < "${MEDIA_MAP}"
+}
+
+# ------------------------------------------------------------ 数据目录标记
+# 与容器 entrypoint 相同约定: MDCx.config 里写配置文件路径,
+# 其父目录即"用户数据目录"(番号库/日志/剩余任务都落这里 = $TRIM_PKGVAR)
+ensure_marker() {
+    echo "${TRIM_PKGVAR}/config.json" > "${TRIM_APPDEST}/MDCx.config"
+    mkdir -p "${TRIM_PKGVAR}/userdata"
+    if [ ! -f "${TRIM_PKGVAR}/config.json" ]; then
+        log_msg "WARN: ${TRIM_PKGVAR}/config.json 不存在, 首次启动将使用默认配置"
+    fi
+}
+
+# ------------------------------------------------------------ Python 运行时
+# 与 Docker 版完全一致的安装方式: uv sync --frozen --no-install-project
+# (python-build-standalone 与 PyPI 均走国内镜像)
+ensure_deps() {
+    local cur_hash
+    cur_hash="$(cat "${TRIM_APPDEST}/uv.lock" "${TRIM_APPDEST}/pyproject.toml" 2>/dev/null | sha256sum | awk '{print $1}')"
+    if [ -f "${VENV_DIR}/bin/python" ] && [ -f "${LOCK_HASH_FILE}" ] && [ "$(cat "${LOCK_HASH_FILE}")" = "${cur_hash}" ]; then
+        return 0
+    fi
+
+    log_msg "同步 Python 依赖(首次或依赖清单变更, 可能需要几分钟)..."
+    cd "${TRIM_APPDEST}" || return 1
+    if ! env \
+        UV_PROJECT_ENVIRONMENT="${VENV_DIR}" \
+        UV_PYTHON="3.13" \
+        UV_PYTHON_INSTALL_MIRROR="https://registry.npmmirror.com/-/binary/python-build-standalone" \
+        UV_DEFAULT_INDEX="https://pypi.tuna.tsinghua.edu.cn/simple" \
+        UV_LINK_MODE=copy \
+        UV_COMPILE_BYTECODE=1 \
+        PYTHONUNBUFFERED=1 \
+        "${UV_BIN}" sync --frozen --no-install-project --no-dev --extra web >> "${LOG_FILE}" 2>&1; then
+        fail_msg "Python 依赖安装失败, 详见数据目录 service.log (检查网络或代理)"
+        return 1
+    fi
+    echo "${cur_hash}" > "${LOCK_HASH_FILE}"
+    log_msg "Python 依赖就绪: ${VENV_DIR}"
+    return 0
+}
+
+# ------------------------------------------------------------ 内嵌 Clash
+ensure_clash() {
+    local src="${TRIM_APPDEST}/clash-runtime"
+    if [ ! -x "${CLASH_DIR}/mihomo" ]; then
+        mkdir -p "${CLASH_DIR}"
+        cp -f "${src}/mihomo" "${CLASH_DIR}/mihomo" 2>/dev/null
+        chmod +x "${CLASH_DIR}/mihomo" 2>/dev/null
+        # 配置与面板只在目标不存在时拷贝, 绝不覆盖用户已有订阅/密码
+        [ -f "${CLASH_DIR}/config.yaml" ] || cp -f "${src}/config.yaml" "${CLASH_DIR}/config.yaml" 2>/dev/null
+        if [ ! -d "${CLASH_DIR}/ui" ] && [ -d "${src}/ui" ]; then
+            cp -r "${src}/ui" "${CLASH_DIR}/ui" 2>/dev/null
+        fi
+        mkdir -p "${CLASH_DIR}/providers"
+        log_msg "已初始化 Clash 运行目录: ${CLASH_DIR}"
+    fi
+    if [ ! -f "${CLASH_DIR}/config.yaml" ]; then
+        log_msg "WARN: 缺少 clash config.yaml, 跳过启动内嵌 Clash"
+        return 0
+    fi
+    # 已在跑就不管
+    if [ -f "${CLASH_PID}" ] && check_process "$(head -n1 "${CLASH_PID}")"; then
+        return 0
+    fi
+    nohup "${CLASH_DIR}/mihomo" -d "${CLASH_DIR}" >> "${LOG_FILE}" 2>&1 &
+    echo $! > "${CLASH_PID}"
+    log_msg "内嵌 mihomo 已启动 (pid $(head -n1 "${CLASH_PID}"))"
+}
+
+stop_clash() {
+    [ -f "${CLASH_PID}" ] || return 0
+    local pid count=0
+    pid="$(head -n1 "${CLASH_PID}")"
+    if [ -n "${pid}" ] && check_process "${pid}"; then
+        kill -TERM "${pid}" 2>/dev/null
+        while check_process "${pid}" && [ ${count} -lt 8 ]; do
+            sleep 1; count=$((count + 1))
+        done
+        check_process "${pid}" && kill -KILL "${pid}" 2>/dev/null
+        log_msg "内嵌 mihomo 已停止"
+    fi
+    rm -f "${CLASH_PID}"
+}
+
+# ---------------------------------------------------------------- 主服务
+prepare() {
+    bind_media
+    ensure_marker
+    ensure_deps || return 1
+    ensure_clash
+    return 0
+}
+
+start_process() {
+    if status; then
+        return 0
+    fi
+    if ! prepare; then
+        return 1
+    fi
+
+    # 载入用户环境(MDCX_API_KEY / MDCX_SAFE_DIRS / TZ 等), 文件在数据目录;
+    # 先在本进程 source 并 export, 子进程(uvicorn/mihomo)统一继承
+    if [ -f "${ENV_FILE}" ]; then
+        set -a
+        # shellcheck disable=SC1090
+        . "${ENV_FILE}"
+        set +a
+    fi
+
+    # 飞牛授权目录并入文件白名单(去重, 授权路径追加在 /media 之后)
+    if [ -n "${TRIM_DATA_ACCESSIBLE_PATHS:-}" ]; then
+        export MDCX_SAFE_DIRS="$(merge_safe_dirs "${MDCX_SAFE_DIRS:-/media}" "${TRIM_DATA_ACCESSIBLE_PATHS}")"
+        log_msg "文件白名单(含飞牛授权目录): ${MDCX_SAFE_DIRS}"
+    fi
+
+    local port="8000"
+    [ -n "${TRIM_SERVICE_PORT:-}" ] && port="${TRIM_SERVICE_PORT}"
+
+    log_msg "启动 MDCx 主服务 (port ${port}) ..."
+    # exec 让 bash 进程被 python 替换, pidfile 记录的就是真进程
+    bash -c "cd '${TRIM_APPDEST}' && exec '${VENV_DIR}/bin/python' -m uvicorn server:app --host 0.0.0.0 --port '${port}'" >> "${LOG_FILE}" 2>&1 &
+    printf "%s" "$!" > "${PID_FILE}"
+
+    sleep 2
+    if status; then
+        log_msg "MDCx 主服务已启动"
+        return 0
+    fi
+    rm -f "${PID_FILE}"
+    fail_msg "MDCx 启动失败, 详见数据目录 service.log"
+    return 1
+}
+
+stop_process() {
+    log_msg "停止 MDCx 主服务 ..."
+    if [ -r "${PID_FILE}" ]; then
+        local pid count=0
+        pid="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
+        if [ -n "${pid}" ] && check_process "${pid}"; then
+            kill -TERM "${pid}" 2>/dev/null
+            while check_process "${pid}" && [ ${count} -lt 10 ]; do
+                sleep 1; count=$((count + 1))
+            done
+            check_process "${pid}" && kill -KILL "${pid}" 2>/dev/null
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    stop_clash
+    unbind_media
+    log_msg "已全部停止"
+    return 0
+}
+
+status() {
+    if [ -f "${PID_FILE}" ]; then
+        local pid
+        pid="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
+        if [ -n "${pid}" ] && check_process "${pid}"; then
+            return 0
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    return 1
+}
+
+case $1 in
+start)
+    start_process
+    ;;
+stop)
+    stop_process
+    ;;
+status)
+    if status; then
+        exit 0
+    else
+        exit 3
+    fi
+    ;;
+*)
+    exit 1
+    ;;
+esac

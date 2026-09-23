@@ -1,0 +1,341 @@
+import asyncio
+import shutil
+import time
+import traceback
+from pathlib import Path
+
+import aiofiles.os
+from PIL import Image
+
+from ..config.enums import DownloadableFile, KeepableFile
+from ..config.extend import get_movie_path_setting
+from ..config.manager import manager
+from ..config.resources import resources
+from ..models.log_buffer import LogBuffer
+from ..signals import signal
+from ..utils import get_used_time
+from ..utils.file import check_pic_async, move_file_async
+from .file import movie_lists
+
+
+async def extrafanart_copy2(folder_path: Path):
+    start_time = time.time()
+    download_files = manager.config.download_files
+    keep_files = manager.config.keep_files
+    extrafanart_copy_folder = manager.config.extrafanart_folder
+    extrafanart_path = folder_path / "extrafanart"
+    extrafanart_copy_path = folder_path / extrafanart_copy_folder
+
+    # 如果不保留，不下载，删除返回
+    if KeepableFile.EXTRAFANART_COPY not in keep_files and DownloadableFile.EXTRAFANART_COPY not in download_files:
+        if await aiofiles.os.path.exists(extrafanart_copy_path):
+            shutil.rmtree(extrafanart_copy_path, ignore_errors=True)
+        return
+
+    # 如果保留，并且存在，返回
+    if KeepableFile.EXTRAFANART_COPY in keep_files and await aiofiles.os.path.exists(extrafanart_copy_path):
+        LogBuffer.log().write(f"\n 🍀 Extrafanart_copy done! (old)({get_used_time(start_time)}s) ")
+        return
+
+    # 如果不下载，返回
+    if DownloadableFile.EXTRAFANART_COPY not in download_files:
+        return
+
+    if not await aiofiles.os.path.exists(extrafanart_path):
+        return
+
+    if await aiofiles.os.path.exists(extrafanart_copy_path):
+        shutil.rmtree(extrafanart_copy_path, ignore_errors=True)
+    shutil.copytree(extrafanart_path, extrafanart_copy_path)
+
+    filelist = await aiofiles.os.listdir(extrafanart_copy_path)
+    for each in filelist:
+        file_new_name = each.replace("fanart", "")
+        file_path = extrafanart_copy_path / each
+        file_new_path = extrafanart_copy_path / file_new_name
+        await move_file_async(file_path, file_new_path)
+    LogBuffer.log().write(f"\n 🍀 ExtraFanart_copy done! (copy extrafanart)({get_used_time(start_time)}s)")
+
+
+async def extrafanart_extras_copy(folder_path: Path):
+    start_time = time.time()
+    download_files = manager.config.download_files
+    extrafanart_path = folder_path / "extrafanart"
+    extrafanart_extra_path = folder_path / "behind the scenes"
+
+    if DownloadableFile.EXTRAFANART_EXTRAS not in download_files:
+        if await aiofiles.os.path.exists(extrafanart_extra_path):
+            shutil.rmtree(extrafanart_extra_path, ignore_errors=True)
+        return True
+
+    if not await aiofiles.os.path.exists(extrafanart_path):
+        return False
+
+    if await aiofiles.os.path.exists(extrafanart_extra_path):
+        shutil.rmtree(extrafanart_extra_path)
+    shutil.copytree(extrafanart_path, extrafanart_extra_path)
+    filelist = await aiofiles.os.listdir(extrafanart_extra_path)
+    for each in filelist:
+        file_new_name = each.replace("jpg", "mp4")
+        file_path = extrafanart_extra_path / each
+        file_new_path = extrafanart_extra_path / file_new_name
+        await move_file_async(file_path, file_new_path)
+    LogBuffer.log().write(f"\n 🍀 Extrafanart_extras done! (copy extrafanart)({get_used_time(start_time)}s)")
+    return True
+
+
+async def _add_to_pic(pic_path: Path, img_pic: Image.Image, mark_size: int, count: int, mark_name: str):
+    # 获取水印图片，生成水印
+    mark_fixed = manager.config.mark_fixed
+    mark_pos_corner = manager.config.mark_pos_corner
+    mark_pic_path = ""
+    if mark_name == "4K":
+        mark_pic_path = resources.icon_4k_path
+    elif mark_name == "8K":
+        mark_pic_path = resources.icon_8k_path
+    elif mark_name == "字幕":
+        mark_pic_path = resources.icon_sub_path
+    elif mark_name == "有码":
+        mark_pic_path = resources.icon_youma_path
+    elif mark_name == "破解":
+        mark_pic_path = resources.icon_umr_path
+    elif mark_name == "流出":
+        mark_pic_path = resources.icon_leak_path
+    elif mark_name == "无码":
+        mark_pic_path = resources.icon_wuma_path
+
+    if mark_pic_path:
+        try:
+            img_subt = Image.open(mark_pic_path)
+            img_subt = img_subt.convert("RGBA")
+            scroll_high = int(img_pic.height * mark_size / 40)
+            scroll_width = int(scroll_high * img_subt.width / img_subt.height)
+            img_subt = img_subt.resize((scroll_width, scroll_high), resample=Image.Resampling.LANCZOS)
+        except Exception:
+            signal.show_log_text(f"{traceback.format_exc()}\n Open Pic: {mark_pic_path}")
+            print(traceback.format_exc())
+            return
+        r, g, b, a = img_subt.split()  # 获取颜色通道, 保持png的透明性
+
+        # 固定一个位置
+        if mark_fixed == "corner":
+            corner_top_left = [(0, 0), (scroll_width, 0), (scroll_width * 2, 0)]
+            corner_bottom_left = [
+                (0, img_pic.height - scroll_high),
+                (scroll_width, img_pic.height - scroll_high),
+                (scroll_width * 2, img_pic.height - scroll_high),
+            ]
+            corner_top_right = [
+                (img_pic.width - scroll_width * 4, 0),
+                (img_pic.width - scroll_width * 2, 0),
+                (img_pic.width - scroll_width, 0),
+            ]
+            corner_bottom_right = [
+                (img_pic.width - scroll_width * 4, img_pic.height - scroll_high),
+                (img_pic.width - scroll_width * 2, img_pic.height - scroll_high),
+                (img_pic.width - scroll_width, img_pic.height - scroll_high),
+            ]
+            corner_dic = {
+                "top_left": corner_top_left,
+                "bottom_left": corner_bottom_left,
+                "top_right": corner_top_right,
+                "bottom_right": corner_bottom_right,
+            }
+            mark_postion = corner_dic[mark_pos_corner][count]
+
+        # 封面四个角的位置
+        else:
+            pos = [
+                {"x": 0, "y": 0},
+                {"x": img_pic.width - scroll_width, "y": 0},
+                {"x": img_pic.width - scroll_width, "y": img_pic.height - scroll_high},
+                {"x": 0, "y": img_pic.height - scroll_high},
+            ]
+            mark_postion = (pos[count]["x"], pos[count]["y"])
+        try:  # 图片如果下载不完整时，这里会崩溃，跳过
+            img_pic.paste(img_subt, mark_postion, mask=a)
+        except Exception:
+            signal.show_log_text(traceback.format_exc())
+        img_pic = img_pic.convert("RGB")
+        temp_pic_path = pic_path.with_suffix(".[MARK].jpg")
+        try:
+            img_pic.load()
+            img_pic.save(temp_pic_path, quality=95, subsampling=0)
+        except Exception:
+            signal.show_log_text(traceback.format_exc())
+        img_subt.close()
+        if await check_pic_async(temp_pic_path):
+            await move_file_async(temp_pic_path, pic_path)
+
+
+async def add_mark_thread(pic_path: Path, mark_list: list[str]):
+    mark_size = manager.config.mark_size
+    mark_fixed = manager.config.mark_fixed
+    mark_pos = manager.config.mark_pos
+    mark_pos_hd = manager.config.mark_pos_hd
+    mark_pos_sub = manager.config.mark_pos_sub
+    mark_pos_mosaic = manager.config.mark_pos_mosaic
+    mark_pos_corner = manager.config.mark_pos_corner
+    try:
+        img_pic = Image.open(pic_path)
+    except Exception:
+        signal.show_log_text(f"{traceback.format_exc()}\n Open Pic: {pic_path}")
+        return
+
+    if mark_fixed == "corner":
+        count = 0
+        if "left" not in mark_pos_corner:
+            count = 3 - len(mark_list)
+        for mark_name in mark_list:
+            await _add_to_pic(pic_path, img_pic, mark_size, count, mark_name)
+            count += 1
+    else:
+        pos = {
+            "top_left": 0,
+            "top_right": 1,
+            "bottom_right": 2,
+            "bottom_left": 3,
+        }
+        mark_pos_count = pos.get(mark_pos, 0)  # 获取自定义位置, 取余配合pos达到顺时针添加的效果
+        count_hd = -1
+        for mark_name in mark_list:
+            if mark_name == "4K" or mark_name == "8K":  # 4K/8K使用固定位置
+                count_hd = pos.get(mark_pos_hd, 0)
+                await _add_to_pic(pic_path, img_pic, mark_size, count_hd, mark_name)
+            elif mark_fixed == "fixed":  # 固定位置
+                count = pos.get(mark_pos_sub, 0) if mark_name == "字幕" else pos.get(mark_pos_mosaic, 0)
+                await _add_to_pic(pic_path, img_pic, mark_size, count, mark_name)
+            else:  # 不固定位置
+                if mark_pos_count % 4 == count_hd:
+                    mark_pos_count += 1
+                if mark_name == "字幕":
+                    await _add_to_pic(pic_path, img_pic, mark_size, mark_pos_count % 4, mark_name)  # 添加字幕
+                    mark_pos_count += 1
+                else:
+                    await _add_to_pic(pic_path, img_pic, mark_size, mark_pos_count % 4, mark_name)
+    img_pic.close()
+
+
+async def add_del_extrafanart_copy(mode: str) -> None:
+    signal.show_log_text(f"Start {mode} extrafanart copy! \n")
+
+    path_settings = get_movie_path_setting()
+    movie_path = path_settings.movie_path
+    extrafanart_folder = path_settings.extrafanart_folder
+    signal.show_log_text(f" 🖥 Movie path: {movie_path} \n 🔎 Checking all videos, Please wait...")
+    movie_type = manager.config.media_type
+    movie_list = await movie_lists([], movie_type, movie_path)  # 获取所有需要刮削的影片列表
+
+    extrafanart_folder_path_list = []
+    for movie in movie_list:
+        movie_file_folder_path = movie.parent
+        extrafanart_folder_path = movie_file_folder_path / "extrafanart"
+        if await aiofiles.os.path.exists(extrafanart_folder_path):
+            extrafanart_folder_path_list.append(movie_file_folder_path)
+    extrafanart_folder_path_list = list(set(extrafanart_folder_path_list))
+    extrafanart_folder_path_list.sort()
+    total_count = len(extrafanart_folder_path_list)
+    new_count = 0
+    count = 0
+    for each in extrafanart_folder_path_list:
+        extrafanart_folder_path = each / "extrafanart"
+        extrafanart_copy_folder_path = each / extrafanart_folder
+        count += 1
+        if mode == "add":
+            if not await aiofiles.os.path.exists(extrafanart_copy_folder_path):
+                shutil.copytree(extrafanart_folder_path, extrafanart_copy_folder_path)
+                signal.show_log_text(f" {count} new copy: \n  {extrafanart_copy_folder_path}")
+                new_count += 1
+            else:
+                signal.show_log_text(f" {count} old copy: \n  {extrafanart_copy_folder_path}")
+        else:
+            if await aiofiles.os.path.exists(extrafanart_copy_folder_path):
+                shutil.rmtree(extrafanart_copy_folder_path, ignore_errors=True)
+                signal.show_log_text(f" {count} del copy: \n  {extrafanart_copy_folder_path}")
+                new_count += 1
+
+    signal.show_log_text(f"\nDone! \n Total: {total_count}  {mode} copy: {new_count} ")
+    signal.show_log_text("=" * 80)
+
+
+def get_poster_paths(img_path: Path) -> tuple[Path, Path, Path]:
+    """由封面图片路径推导出 poster / thumb / fanart 的输出路径.
+
+    对应桌面版裁剪窗口里的推导规则: 配置项"简化图片名"开启时统一用 poster.jpg,
+    否则保留番号前缀. thumb 与 fanart 与 poster 同名不同前缀.
+    """
+    img_name, img_ex = img_path.stem, img_path.suffix
+    poster_path = img_path.with_name("poster.jpg")
+    if not manager.config.pic_simple_name and "-" in img_name:
+        poster_path = img_path.with_name(
+            img_path.name.replace("-fanart", "").replace("-thumb", "").replace("-poster", "").replace(img_ex, "")
+            + "-poster.jpg"
+        )
+    poster_name = poster_path.name
+    thumb_path = img_path.with_name(poster_name.replace("poster.", "thumb."))
+    fanart_path = img_path.with_name(poster_name.replace("poster.", "fanart."))
+    return poster_path, thumb_path, fanart_path
+
+
+async def cut_poster(
+    img_path: Path,
+    box: tuple[int, int, int, int],
+    mark_list: list[str] | None = None,
+) -> dict[str, str]:
+    """按给定矩形裁剪封面, 并同步更新 poster / thumb / fanart.
+
+    ``box`` 是原图坐标系下的 (左上x, 左上y, 右下x, 右下y), 与桌面版裁剪窗口计算的
+    裁剪范围含义一致 —— 前端只需把显示坐标换算成原图坐标后传进来即可.
+
+    thumb 与 fanart 保存的是**未裁剪的原图**, 与桌面版行为一致: 只有 poster 会被裁.
+    """
+    if mark_list is None:
+        mark_list = []
+
+    if not await aiofiles.os.path.exists(img_path):
+        raise FileNotFoundError(f"图片不存在: {img_path}")
+
+    x1, y1, x2, y2 = box
+    if x2 <= x1 or y2 <= y1:
+        raise ValueError("裁剪范围无效: 右下角坐标必须大于左上角.")
+
+    poster_path, thumb_path, fanart_path = get_poster_paths(img_path)
+    result = {"poster": str(poster_path), "thumb": "", "fanart": ""}
+
+    need_thumb = DownloadableFile.THUMB in manager.config.download_files and thumb_path != img_path
+    need_fanart = DownloadableFile.FANART in manager.config.download_files and fanart_path != img_path
+
+    def _do_cut() -> None:
+        # poster 常与原图是同一个文件, 所以必须先把原图读进内存再写盘:
+        # 若先裁剪覆盖 poster, 之后重新读盘拿到的就已经是裁剪后的图了,
+        # 会导致 thumb / fanart 被错误地裁掉 (桌面版靠内存里的 img 副本规避了这点).
+        with Image.open(img_path) as raw:
+            original = raw.convert("RGB")
+            cropped = original.crop(box)
+            cropped.save(poster_path, quality=95, subsampling=0)
+            cropped.close()
+            if need_thumb:
+                original.save(thumb_path, quality=95, subsampling=0)
+            if need_fanart:
+                original.save(fanart_path, quality=95, subsampling=0)
+            original.close()
+
+    await asyncio.to_thread(_do_cut)
+
+    if manager.config.poster_mark == 1:
+        await add_mark_thread(poster_path, mark_list)
+
+    if need_thumb:
+        if manager.config.thumb_mark == 1:
+            await add_mark_thread(thumb_path, mark_list)
+        result["thumb"] = str(thumb_path)
+    else:
+        result["thumb"] = str(img_path)
+
+    if need_fanart:
+        if manager.config.fanart_mark == 1:
+            await add_mark_thread(fanart_path, mark_list)
+        result["fanart"] = str(fanart_path)
+
+    signal.show_log_text(f"✅ 封面裁剪完成: {poster_path.name}")
+    return result

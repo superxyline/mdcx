@@ -1,0 +1,13 @@
+{
+    ".url": {
+        "mdcx.Application": {
+            "title": "MDCx 刮削",
+            "icon": "images/icon_{0}.png",
+            "type": "iframe",
+            "protocol": "http",
+            "port": "8000",
+            "url": "/",
+            "allUsers": true
+        }
+    }
+}
