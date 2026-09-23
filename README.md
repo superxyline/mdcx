@@ -113,10 +113,10 @@ uv run uvicorn server:app --host 127.0.0.1 --port 8000
 ## 需要额外配置的两件事
 
 **代理(可选但常见)**。刮削源大多在墙外, 建议配置代理。若用 docker-compose 里编排的
-Clash 容器, 代理地址填服务名形式:
+Clash 容器, 代理地址填容器名形式:
 
 ```
-http://clash:7890
+http://mdcx-clash:7890
 ```
 
 注意**不能填 `127.0.0.1`** —— 那是容器自己, 不是代理容器。
@@ -125,7 +125,23 @@ http://clash:7890
 **JAVDB Cookie(可选)**。JAVDB 是很优质的源, 但需要登录 Cookie。
 不配也能正常刮削, 只是少一路数据来源。
 
-## 部署到 NAS(详细教程)
+## NAS 部署(两种方式, 二选一)
+
+| | 方式一: Docker | 方式二: 飞牛原生 FPK |
+|---|---|---|
+| 适用系统 | 任意带 Docker 的 Linux NAS(群晖/威联通/飞牛/自建) | 仅飞牛 fnOS |
+| 运行形态 | 容器隔离, 路径靠挂载(`/vol...:/media`) | 无容器, 系统级运行, 目录靠飞牛「授权目录」 |
+| Clash | compose 内编排 `mdcx-clash` 容器 | 包内托管 mihomo 单文件, 应用中心统一启停 |
+| 目录访问 | 改 compose 挂载行 | 飞牛 UI 授权 + 自动并入文件白名单(真实路径/名字) |
+| 升级 | tar 同步源码 + `compose up -d --build` | `fnpack build` 重打 + 应用中心升级 |
+| 数据位置 | 部署目录 `data/` | `/vol{n}/@appdata/mdcx`(卸载保留) |
+
+> ⚠️ 两种方式**同占 8000/7890/9090 端口, 互斥, 只能装一种**;
+> 相互迁移见各自教程末尾的「回退/迁移」小节。
+
+---
+
+## NAS 部署 —— 方式一: Docker(详细教程)
 
 适用任何带 Docker 的 Linux NAS(飞牛 fnOS / 群晖 / 威联通 / 自建),以 Docker Compose 方式部署并支持后续升级。Clash 代理编排与面板配置细节另见 [docker/README.md](docker/README.md)。
 
@@ -243,13 +259,117 @@ sudo docker compose up -d --build
 | 历史记录封面全是占位图(接口 404) | 容器 `/media` 挂载指错了目录,回到第 2 步检查挂载行 |
 | 每次进首页都被要求重填 Key | 旧版缺陷(2026-09-22 已修复),拉最新代码重新部署 |
 | 打开页面一直转圈/接口超时 | 看 `docker compose logs mdcx`;网络问题先开代理(见下) |
-| 刮削源访问失败 | 在 设置 → 代理与网络 配代理,用仓库自带 Clash 时填 `http://clash:7890`,**不能填 127.0.0.1** |
+| 刮削源访问失败 | 在 设置 → 代理与网络 配代理,用仓库自带 Clash 时填 `http://mdcx-clash:7890`,**不能填 127.0.0.1** |
 | 容器内路径报错/文件找不到 | 容器视角只有 `/media/...`,设置页不要填宿主机路径 |
 | Windows Git Bash 下 curl 报路径 403 | MSYS 会把 `/media/...` 改写成本地路径,加 `MSYS_NO_PATHCONV=1` 再执行 |
 
 其他 Clash 代理编排与面板配置:
 
 👉 [docker/README.md](docker/README.md)
+
+## NAS 部署 —— 方式二: 飞牛 OS 原生 FPK(详细教程)
+
+打包成飞牛 fnOS 的**原生应用**:无容器、系统级运行、内嵌 Clash, 由应用中心统一启停。
+打包工程在 `fnos/`。
+
+### 第 0 步:准备好媒体库目录
+
+同方式一第 0 步(`待刮削 / 整理完成 / 刮削失败` 三个目录)。
+原生版**不需要改 config.json**——容器时代的 `/media/...` 路径由第 4、5 步的
+两套机制接上: `media-bind.conf` 路径映射 + 飞牛目录授权。
+
+### 第 1 步:获取代码与运行时二进制
+
+```bash
+git clone https://github.com/superxyline/mdcx.git
+cd mdcx
+bash fnos/fetch-binaries.sh     # 下载 uv + mihomo (linux x86_64, 已 gitignore)
+```
+
+### 第 2 步:打包
+
+1. 下载官方 `fnpack` CLI(有 Windows/Linux 版):
+   https://developer.fnnas.com/docs/cli/fnpack/
+2. 打包:
+
+```bash
+cd fnos
+fnpack build --directory mdcx   # 产出 fnos/mdcx.fpk (约 51MB)
+```
+
+打包源 `fnos/mdcx/` 的结构: `manifest`(元信息)、`cmd/`(9 个生命周期脚本,
+核心是 `main`: 路径映射 → 装依赖 → 拉起 mihomo 与主服务)、`app/`(代码+前端+
+uv+mihomo+面板 UI)、`config/`(权限, 本应用 run-as root 用于路径映射与媒体文件操作)、
+`wizard/`、图标。
+
+### 第 3 步:安装(⚠️ 先停 Docker 版)
+
+两种方式**同占 8000/7890/9090, 互斥**;已装 Docker 版先 `sudo docker compose down`。
+
+```bash
+# 图形: 应用中心 → 右上「手动安装」→ 上传 mdcx.fpk
+# 命令行:
+sudo appcenter-cli install-fpk /path/to/mdcx.fpk
+```
+
+安装完成应用中心会自动启动。**首次启动**自动下载 Python 3.13 并按锁文件安装依赖
+(走国内镜像, 约几分钟), 日志: 数据目录 `service.log`、`/var/log/apps/mdcx.log`。
+
+### 第 4 步:装后配置
+
+配置都在数据目录 **`/vol{n}/@appdata/mdcx/`**(卸载保留):
+
+| 文件 | 用途 |
+|---|---|
+| `env` | `MDCX_API_KEY`(接口密码)等环境变量, 改完在应用中心**重启**生效 |
+| `media-bind.conf` | 媒体路径映射表, 每行 `<宿主真实路径> <容器时代路径>`, 启动时自动 `mount --bind`, 例:<br>`/vol1/1000/影视/待刮削 /media/待刮削` |
+| `clash/` | 内嵌 mihomo 的配置(订阅/密码)与面板 UI |
+
+接口密码生成:`openssl rand -base64 32 | tr -d '/+=' | head -c 48`,
+写入 `env` 的 `MDCX_API_KEY=` 之后重启应用。
+`config.json` 里的媒体路径保持 `/media/...` 不动, 由 `media-bind.conf` 接管。
+
+### 第 5 步:目录授权(设置页按真实路径选文件夹)
+
+飞牛 **系统设置 → 应用 → mdcx → 授权目录** 里添加要开放的文件夹。
+启动时授权列表会自动并入应用的文件白名单, 设置页的文件选择器即可按
+**真实路径、真实名字**浏览(与飞牛文件管理完全一致)。
+⚠️ 授权信息是**启动时快照**, 修改授权后必须在应用中心**重启应用**才生效。
+
+### 第 6 步:启动与验证
+
+```bash
+sudo appcenter-cli start mdcx     # 启动(stop/status 同理)
+curl -H "X-API-KEY: 你的Key" http://NAS地址:8000/api/v1/scrape/status
+tail -f /vol{n}/@appdata/mdcx/service.log
+```
+
+浏览器打开 `http://NAS地址:8000`, 后续与方式一第 5 步相同(确认媒体路径 → 丢片 → 开刮)。
+
+Clash 面板: `http://NAS地址:9090/ui/`(后端地址填 NAS 的 IP; 密钥 = 数据目录
+`clash/config.yaml` 里的 `secret`)。内嵌 mihomo 由 `cmd/main` 与主服务一同启停。
+
+### 第 7 步(后续升级):重打再装
+
+改代码/拉新版本 → 本地 `fnpack build` 重新打包 → 应用中心「手动安装」覆盖升级
+(或 `appcenter-cli install-fpk`)。数据目录不动, 配置、历史、订阅全部保留。
+
+### 回退与迁移
+
+- **回退 Docker 版**: 应用中心卸载 mdcx(数据可选保留) →
+  `cd <部署目录> && sudo docker compose up -d --build`;
+  若 FPK 期间产生了新数据, 先把 `/vol{n}/@appdata/mdcx/` 拷回部署目录 `data/` 再起。
+- **Docker 版 → FPK**: 即本教程(第 3 步前先 `compose down`, 数据按第 4 步拷入数据目录)。
+
+### 方式二常见问题
+
+| 现象 | 原因与处理 |
+|---|---|
+| 安装时报端口占用 | Docker 版没停干净, `compose down` 后重装 |
+| 首次启动很慢或失败 | 首启在线装 Python 与依赖(几分钟); 失败看 `service.log`(多为网络问题) |
+| 设置页文件选择器只有 `/media` | 飞牛里未授权目录, 或授权后没重启应用(第 5 步) |
+| 外网访问 502/不通 | 面板 9090 里看当前选中节点是否可用(订阅节点质量问题, 非部署问题) |
+| 8000 打不开 | `sudo appcenter-cli status mdcx` + 看 `service.log` |
 
 ## 常见问题
 

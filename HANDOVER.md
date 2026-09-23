@@ -28,15 +28,19 @@
 | 推送 remote `github` | `https://github.com:443/superxyline/mdcx.git`（带端口绕过 insteadOf 改写） |
 | 回退点 | tag `before-qt-removal`（摘除 Qt 前的完整状态） |
 
-**NAS 部署（2026-09-19 深夜已部署至最新提交，实测通过）**
+**NAS 部署（2026-09-23 起主用：飞牛原生 FPK；Docker 版已 down 保留作回退）**
 
 | 项目 | 值 |
 |---|---|
 | 地址 | `192.168.31.26`，飞牛 fnOS（Debian 12，x86_64） |
-| Web | `http://192.168.31.26:8000` |
-| 部署目录 | `/vol1/1000/Docker/mdcx/`（源码 + data 数据卷 + clash 配置） |
-| 容器 | `mdcx`（8000）、`mdcx-clash`（7890 代理 / 9090 面板） |
-| 数据目录 | 容器内 `/data`（= 宿主机 `.../mdcx/data/`），含 config.json、scrape_history.jsonl、timed_scrape.json、番号库 |
+| Web | `http://192.168.31.26:8000`（原生 uvicorn，无容器） |
+| **原生版数据** | `/vol3/@appdata/mdcx/`（config.json、历史、env、media-bind.conf、.venv、clash/），应用文件 `/vol3/@appcenter/mdcx` |
+| 管理 | `sudo appcenter-cli start/stop/status mdcx`；日志 `数据目录/service.log` |
+| 内嵌 Clash | mihomo 单文件跑在数据目录 clash/（7890 代理 / 9090 面板，启动脚本托管） |
+| Docker 版(回退) | `/vol1/1000/Docker/mdcx/` 整目录保留，`compose down` 状态；回退 = 卸 FPK 后 `up -d --build` |
+
+> Docker 版历史部署（09-19～09-23）：部署目录 `/vol1/1000/Docker/mdcx/`，容器 `mdcx`(8000)、
+> `mdcx-clash`(7890/9090)，数据卷 `./data`（内容已完整迁入原生数据目录）。
 
 **SSH 免交互访问（本轮已配好并验证，直接可用）**
 
@@ -142,8 +146,55 @@
    ⚠️ 部署时 tar 包不含 docker-compose.yml，但**别拿仓库模板覆盖 NAS 上的 compose**——
    挂载行是 NAS 专属的。改前备份：`/home/Aadmin/docker-compose.yml.bak-0922-2129`。
    浏览器实测：3 张历史封面全部恢复真实图片（blob 200）。
+7. **Clash 订阅设置进 metacubexd 面板**（2026-09-23）：
+   - mdcx 侧：`GET /api/v1/network/clash` + `PUT /api/v1/network/clash/subscription`
+     （按行改 config.yaml 的 url/interval、备份、删 provider 缓存、9090 热重载）；
+     认证在 X-API-KEY 之外新增 **`X-Panel-Secret`**（= mihomo 面板 secret，
+     **仅放行 /api/v1/network/**，见 dependencies.py）；mdcx 的网络页也做了同款管理卡片。
+   - ⚠️ `CLASH_API` 用容器名 `http://mdcx-clash:9090`——这台 NAS 的 compose 网络没注入
+     `clash` 服务名别名（getent 解析失败），文档里的代理地址已统一改为 mdcx-clash:7890。
+     NAS compose 新增挂载 `- ./clash:/clash-config`（备份 `docker-compose.yml.bak-clashsub`）。
+   - 面板侧：fork 了 MetaCubeX/metacubexd（源码在 `E:\codex\tools\metacubexd`，浅克隆），
+     新增 `pages/mdcx-subscription.vue` + Sidebar/MobileBottomNav 菜单项 + zh/en 翻译。
+     构建：`NUXT_APP_BASE_URL='./' pnpm --filter @metacubexd/ui generate`（pnpm 10.34.1 corepack、
+     依赖走 npmmirror；上游 eslint 在 TS7 下自身崩溃，可跳过）。
+     产物入库 **`docker/clash-ui/`**（7.6MB），部署时替换 NAS `clash/ui/`（本地文件优先，
+     mihomo 不再从 GitHub 下载官方面板）。**官方面板更新不会自动跟随**，要更新需在 fork 上合并重构建。
+   - 实测：面板菜单「订阅设置」→ 状态加载（7 节点/更新时间）→ 保存 → toast + 更新时间刷新。
 
 本地验证：`uv run pytest` 69 passed / ruff 通过 / `pnpm run ci` 通过 / 前端已 build。NAS：无 Key→401，带 Key→`auth_enabled=true`，容器 Up。
+
+---
+
+## 五c、2026-09-23 会话：飞牛原生 FPK 化（已装机实测）
+
+**交付**：官方 `fnpack` 打包的原生应用（无 Docker），工程 `fnos/mdcx/`，产物 `fnos/mdcx.fpk`（51MB，
+含 uv 56MB + mihomo 61MB + 代码/前端/面板 UI）。构建：`cd fnos && fnpack build --directory mdcx`。
+
+**机制（`cmd/main` 九钩子里的核心脚本，全部幂等）**：
+
+1. **bind mount 保配置红线**：启动读数据目录 `media-bind.conf`（每行 `<真实路径> <容器时代路径>`），
+   `mount --bind` 挂到 `/media/*` —— config.json 一个字不用改，红线语义延续。
+2. **Python 3.13 自带**：包内 `runtime/uv` + `UV_PYTHON="3.13"` + `.python-version`，
+   uv sync --frozen --no-install-project（与 Dockerfile 同款），镜像：python-build-standalone 走 npmmirror、
+   PyPI 走清华。venv 落数据目录，hash 变更才重装。
+3. **双进程常驻**：uvicorn(8000) + mihomo(7890/9090)，pid 文件在数据目录；
+   `sudo appcenter-cli start/stop/status mdcx` 管理。`run-as: root`（bind mount 与媒体文件操作需要）。
+4. **原生环境变量**（`env`，容器版没有的两个）：`MDCX_CLASH_CONFIG_DIR=<数据目录>/clash`、
+   `MDCX_CLASH_API=http://127.0.0.1:9090`（原生无 /clash-config 挂载、无 mdcx-clash 容器名）。
+5. **飞牛授权目录 → 文件白名单**（本轮用户需求）：启动时把 `TRIM_DATA_ACCESSIBLE_PATHS`（冒号分隔）
+   并入 `MDCX_SAFE_DIRS`（**逗号分隔**，python split(',')！曾因用冒号合并启动失败）——
+   设置页文件选择器即可按**真实路径/真实名字**浏览已授权文件夹；授权变更需重启应用。
+   **仅原生版**改了 `fnos/mdcx/cmd/main`，docker 版维持 compose 原样（用户要求）。
+
+**装机过程要点**：`sudo appcenter-cli install-fpk /home/Aadmin/mdcx.fpk`；安装即自动 start；
+数据迁移 = docker `data/.` 拷入 `@appdata/mdcx` + clash 真实 config 覆盖模板 + env 填 Key + media-bind 写三条。
+**踩坑**：uv 默认挑了 Python 3.14 → cffi 无 cp314 wheel 又无 cc，首启失败——必须钉 3.13；
+`appcenter-cli` 无 restart 子命令，只能 stop/start。
+
+**实测**：8000 登录态/3 张真实封面(blob 379px)、401 边界、面板订阅页(内核在线/7 节点/保存重载)、
+7890 内网 DIRECT 200（**外网 502 = 订阅里「免费-日本1」节点本身挂了，非部署问题**，面板换节点即可）、
+files API 真实路径列真实目录名、/etc 403 边界。飞牛已授权 `<私密媒体库路径>`，重启后自动生效。
 
 ---
 
