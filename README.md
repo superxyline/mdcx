@@ -261,6 +261,7 @@ sudo docker compose up -d --build
 | 打开页面一直转圈/接口超时 | 看 `docker compose logs mdcx`;网络问题先开代理(见下) |
 | 刮削源访问失败 | 在 设置 → 代理与网络 配代理,用仓库自带 Clash 时填 `http://mdcx-clash:7890`,**不能填 127.0.0.1** |
 | 容器内路径报错/文件找不到 | 容器视角只有 `/media/...`,设置页不要填宿主机路径 |
+| 从 FPK 迁回 Docker 后刮削源报 `Could not resolve proxy` | config 的 `proxy` 还是原生版的 `127.0.0.1:7890`,容器网络里应改回 `http://mdcx-clash:7890` |
 | Windows Git Bash 下 curl 报路径 403 | MSYS 会把 `/media/...` 改写成本地路径,加 `MSYS_NO_PATHCONV=1` 再执行 |
 
 其他 Clash 代理编排与面板配置:
@@ -329,6 +330,13 @@ sudo appcenter-cli install-fpk /path/to/mdcx.fpk
 写入 `env` 的 `MDCX_API_KEY=` 之后重启应用。
 `config.json` 里的媒体路径保持 `/media/...` 不动, 由 `media-bind.conf` 接管。
 
+> ⚠️ **从 Docker 版迁移过来的 config.json, 迁完必查代理地址**: 原生环境没有容器 DNS,
+> 容器名 `http://mdcx-clash:7890` 解析不了, 所有走代理的刮削源会全部报
+> `curl: (5) Could not resolve proxy`(表面看像断网, 其实是代理指向错误)。
+> 原生版请改为 **`http://127.0.0.1:7890`**(内嵌 mihomo 就在本机); **回退 Docker
+> 版时再改回容器名**。凡 config 里引用容器网络名的字段(代理、Emby 地址等),
+> 两种部署方式互相迁移时都要逐个过一遍。
+
 ### 第 5 步:目录授权(设置页按真实路径选文件夹)
 
 飞牛 **系统设置 → 应用 → mdcx → 授权目录** 里添加要开放的文件夹。
@@ -368,6 +376,7 @@ Clash 面板: `http://NAS地址:9090/ui/`(后端地址填 NAS 的 IP; 密钥 = �
 | 安装时报端口占用 | Docker 版没停干净, `compose down` 后重装 |
 | 首次启动很慢或失败 | 首启在线装 Python 与依赖(几分钟); 失败看 `service.log`(多为网络问题) |
 | 设置页文件选择器只有 `/media` | 飞牛里未授权目录, 或授权后没重启应用(第 5 步) |
+| 刮削报 `curl: (5) Could not resolve proxy` | config 的 `proxy` 还是从 Docker 迁来的容器名, 改成 `http://127.0.0.1:7890`(见第 4 步警告) |
 | 外网访问 502/不通 | 面板 9090 里看当前选中节点是否可用(订阅节点质量问题, 非部署问题) |
 | 8000 打不开 | `sudo appcenter-cli status mdcx` + 看 `service.log` |
 
