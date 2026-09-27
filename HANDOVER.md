@@ -1,6 +1,6 @@
 # 项目交接文档
 
-> 最后更新：2026-09-22
+> 最后更新：2026-09-26
 > 用途：供新对话快速了解项目全貌，接续开发。**新对话请先通读本文件再动手。**
 
 ---
@@ -23,10 +23,12 @@
 | 项目 | 值 |
 |---|---|
 | 本地路径 | `E:\codex\mdcx`（git 工作区干净，与 GitHub 同步） |
-| GitHub | `https://github.com/superxyline/mdcx`（公开，分支 `master`，最新提交 `9649de6`） |
+| GitHub | `https://github.com/superxyline/mdcx`（公开，`master` = `6846de8`；**唯一推送目标**） |
 | 上游 remote `origin` | `https://ghproxy.net/https://github.com/sqzw-x/mdcx.git`（只读加速） |
 | 推送 remote `github` | `https://github.com:443/superxyline/mdcx.git`（带端口绕过 insteadOf 改写） |
-| 回退点 | tag `before-qt-removal`（摘除 Qt 前的完整状态） |
+| ⚠️ **不再推 Gitee** | 2026-09-26 用户决定：**本项目今后只推 GitHub，不向 Gitee 上传**。Gitee 仓库 `superxyline/mdcx` 已存在且发过 v1.0.0，仅作存档，**不要再同步** |
+| 发行版 | GitHub Release **v1.0.0**（tag 同名）含 `mdcx.fpk` 附件（51MB，公开可下）；Gitee 侧同名 Release 为存档 |
+| ⚠️ 历史安全清理 | 2026-09-26 用 `git filter-repo` **重写全部历史**（抹 NAS 密码/用户名/私密媒体路径），本地与 GitHub 的 commit SHA 自 2024-03 起**全部改变**，旧 SHA 引用全部失效 |
 
 **NAS 部署（2026-09-23 起主用：飞牛原生 FPK；Docker 版已 down 保留作回退）**
 
@@ -42,9 +44,12 @@
 > Docker 版历史部署（09-19～09-23）：部署目录 `/vol1/1000/Docker/mdcx/`，容器 `mdcx`(8000)、
 > `mdcx-clash`(7890/9090)，数据卷 `./data`（内容已完整迁入原生数据目录）。
 
-**SSH 免交互访问（本轮已配好并验证，直接可用）**
+**SSH 免交互访问（直接可用）**
 
-- 用户 `<NAS用户名>`，密码 `<NAS密码>`；docker 需要 `sudo`（密码同上）。
+- 用户名/密码**不在本文件**（09-26 安全清理后脱敏）：**读 `E:\codex\tools\nas_ssh.py` 第 15 行**
+  （USER/PWD 常量已更新为轮换后的新密码；sudo 密码同 SSH 密码）。
+- 面板（9090）secret：`E:\codex\tools\mdcx_panel_secret.txt`（09-26 轮换后的新值；
+  mdcx 后端的 X-Panel-Secret 通道读 config 自动跟随，无需改 mdcx 配置）。
 - 辅助脚本：`E:\codex\tools\nas_ssh.py`（paramiko 封装，已装进 `E:\codex\tools\python310`）：
   - `python nas_ssh.py "<shell命令>"` —— 执行远程命令
   - `python nas_ssh.py --put <本地> <远程>` —— 上传并自动 md5 校验 ✅ 已实测可用
@@ -205,12 +210,43 @@ files API 真实路径列真实目录名、/etc 403 边界。飞牛已授权 `<�
 
 ---
 
+## 五d、2026-09-26 会话（代理修复实刮 + 安全清理 + 双平台发行 + 停 Gitee）
+
+1. **代理修复实刮验证**：config 的 `proxy` 改 `http://127.0.0.1:7890` 后重启（详见五c末尾补记），
+   实际触发一轮刮削 **2/2 全成功**（NPJS-268，封面/NFO 落位正常）——代理链路闭环确认。
+2. **README 双向迁移提示**：Docker↔FPK 互迁时 `proxy` 指向错（容器名/本机）会致刮削源全报
+   `curl: (5) Could not resolve proxy`，已在两种部署方式的装后配置与常见问题表加**双向警告**。
+3. **⚠️ GitHub 历史安全清理**（重要，SHA 已全变）：
+   - 起因：HANDOVER 曾随公开仓库含 NAS 密码/用户名/私密媒体路径（自 09-19 起在公网）。
+   - 处理：HANDOVER 脱敏 → `git filter-repo --replace-text` **重写全部历史**（446 提交，
+     blob 级验证三串信息清零）→ 强推 GitHub。**commit SHA 全部改变，旧 SHA 引用失效**。
+   - 轮换：NAS 登录密码已改（新值见 `nas_ssh.py`）；面板 secret 已改
+     （新值见 `E:\codex\tools\mdcx_panel_secret.txt`，09-26 换后旧值作废）。
+   - API Key、订阅链接经全库扫描**从未入库**，未轮换。
+   - ⚠️ 遗留：GitHub 上两个旧 tag（`pre-20240311`、`python3.13`）强推被拒（token 缺
+     `workflow` scope），仍指向旧历史——密码已轮换风险可控，**待删**（网页删最快）。
+4. **双平台发行 v1.0.0**（含最新 FPK，51,385,790 字节）：
+   - GitHub Release：tag `v1.0.0` + `mdcx.fpk` 附件（公开直链已验证 200）。
+   - Gitee：新建 `superxyline/mdcx` 仓库 + 推码 + 同名 Release。
+     ⚠️ 匿名访问其附件直链/页面返回 403（Gitee 风控/新仓限制）。
+5. **🚫 Gitee 停止同步（用户 2026-09-26 明确决定）**：
+   **本项目今后只推 GitHub，不再向 Gitee 上传任何内容。** Gitee 仓库仅作存档。
+6. **推送通道经验**：代理（`git -c http.proxy=http://192.168.31.26:7890`）与本机直连**双通道
+   互备**；免费机场节点会整批失联——触发一次订阅重拉（PUT network/clash/subscription 同值保存，
+   删缓存重拉常换到新节点）+ 抓直连窗口可解。
+
+---
+
 ## 六、遗留事项（按优先级）
 
 1. **媒体库浏览页**：按演员/系列/日期浏览已刮影片的墙页（数据在 NFO 里），点开复用结果详情弹窗。
 2. **硬链接整理模式**：现有软链接在源路径变化时断，硬链接更适合单独挂媒体服务器的场景。
 3. 单文件刮削接口必须传 URL，小白不友好——可做成"自动猜站点"。
-4. ~~刮削前预览确认~~ / ~~访问密码引导~~ / ~~失败记录跨重启~~ / ~~Clash 内网直连~~（2026-09-22 已完成）
+4. **删 GitHub 旧 tag** `pre-20240311`、`python3.13`（仍指旧敏感历史；网页删最快，
+   或 token 加 `workflow` scope 后本地强推）。
+5. **Docker compose"别人开箱即装"改造**（预构建镜像发布 + .env 参数化 + Clash 自动生成）：
+   2026-09-25 给过完整方案，**用户决定暂不做**，方案见当次会话/README，重启时先问。
+6. ~~刮削前预览确认~~ / ~~访问密码引导~~ / ~~失败记录跨重启~~ / ~~Clash 内网直连~~（2026-09-22 已完成）
 
 ---
 
@@ -326,16 +362,20 @@ mdcx/
 ## 十、用户偏好（完整版在 E:\codex\AGENTS.md，务必遵守）
 
 - **写代码前必须先确认**（先给方案 → AskUserQuestion 确认 → 再动手）
-- **严禁改 NAS 媒体路径**（见「三」，本轮血的教训）
+- **严禁改 NAS 媒体路径**（见「三」，血的教训）
+- **🚫 本项目不再向 Gitee 上传**（2026-09-26 决定，只推 GitHub）
+- **凭据不入库**：密码/Key/订阅链接/私密路径一律不进 git（09-26 安全清理的教训，
+  HANDOVER 里也只写占位符，真值看 `E:\codex\tools` 下的本地文件）
 - 思考过程用中文；优先复用开源代码；构建 APK 先确认只做 arm64
-- 工具放 `E:\codex\tools`；GitHub 推送用带端口 remote
+- 工具放 `E:\codex\tools`；GitHub 推送用带端口 remote（不通时走 NAS 代理或抓直连窗口）
 
 ---
 
 ## 十一、下一步建议
 
-1. 等用户把待刮内容放进 `/media/待刮削` 后实际刮一轮，观察
-   结果列表/预览/持久化在真实数据上的表现
+1. ~~实刮验证~~（09-26 已 2/2 通过）；日常使用观察真实批次的表现
 2. 想启用自动化时：设置→杂项 勾 timed_scrape + 调 timed_interval；
    通知填 Bark Key（国内最省事）；需要 Emby 自动刷库就开 emby_refresh
-3. 按需推进「六、遗留事项」：预览确认 → 媒体库浏览页 → 硬链接 → 访问密码
+3. 按需推进「六、遗留事项」：删旧 tag → 媒体库浏览页 → 硬链接 → 单文件自动猜站点
+4. 下次发版：改 manifest/cmd 版本 → `fnos/fetch-binaries.sh` + `fnpack build` →
+   git tag → **只推 GitHub** Release 附 fpk（不碰 Gitee）
