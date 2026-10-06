@@ -111,6 +111,17 @@ export type ClashStatus = {
 export type CleanAction = 'clean_ext' | 'clean_name' | 'clean_contains' | 'clean_size' | 'clean_ignore_ext' | 'clean_ignore_contains' | 'i_know' | 'i_agree' | 'auto_clean';
 
 /**
+ * CleanLeftoversBody
+ */
+export type CleanLeftoversBody = {
+    /**
+     * Paths
+     * 确认要删除的路径列表(文件或空目录)
+     */
+    paths: Array<string>;
+};
+
+/**
  * Config
  */
 export type ConfigInput = {
@@ -123,6 +134,11 @@ export type ConfigInput = {
      * 软链接路径
      */
     softlink_path?: string;
+    /**
+     * 影视库目录
+     * 工具箱「影视库去重」扫描的成品库目录, 可添加多个; 与上面的媒体路径(刮削源)互不影响
+     */
+    media_libraries?: Array<string>;
     /**
      * 成功输出目录
      * 刮削成功的影片整理后存放的目录
@@ -737,6 +753,11 @@ export type ConfigOutput = {
      * 软链接路径
      */
     softlink_path?: string;
+    /**
+     * 影视库目录
+     * 工具箱「影视库去重」扫描的成品库目录, 可添加多个; 与上面的媒体路径(刮削源)互不影响
+     */
+    media_libraries?: Array<string>;
     /**
      * 成功输出目录
      * 刮削成功的影片整理后存放的目录
@@ -1448,9 +1469,83 @@ export type CutRequest = {
 };
 
 /**
+ * DeleteDuplicatesBody
+ */
+export type DeleteDuplicatesBody = {
+    /**
+     * Paths
+     * 确认要删除的副本文件路径
+     */
+    paths: Array<string>;
+};
+
+/**
  * DownloadableFile
  */
 export type DownloadableFile = 'poster' | 'thumb' | 'fanart' | 'extrafanart' | 'trailer' | 'nfo' | 'extrafanart_extras' | 'extrafanart_copy' | 'theme_videos' | 'ignore_pic_fail' | 'ignore_youma' | 'ignore_wuma' | 'ignore_fc2' | 'ignore_guochan' | 'ignore_size';
+
+/**
+ * DuplicateGroup
+ */
+export type DuplicateGroup = {
+    /**
+     * Number
+     * 番号
+     */
+    number: string;
+    /**
+     * Items
+     * 同一番号的所有副本
+     */
+    items: Array<DuplicateItem>;
+};
+
+/**
+ * DuplicateItem
+ */
+export type DuplicateItem = {
+    /**
+     * Path
+     * 视频文件路径
+     */
+    path: string;
+    /**
+     * Size
+     * 文件大小(字节)
+     */
+    size: number;
+    /**
+     * Mtime
+     * 修改时间戳
+     */
+    mtime?: number;
+    /**
+     * From Nfo
+     * 番号是否来自 NFO(比文件名解析更可靠)
+     */
+    from_nfo?: boolean;
+};
+
+/**
+ * DuplicatesResponse
+ */
+export type DuplicatesResponse = {
+    /**
+     * Scanned
+     * 扫描到的视频文件数
+     */
+    scanned: number;
+    /**
+     * Ungrouped
+     * 识别不出番号被跳过的文件数
+     */
+    ungrouped?: number;
+    /**
+     * Groups
+     * 出现多次的番号组
+     */
+    groups: Array<DuplicateGroup>;
+};
 
 /**
  * EmbyAction
@@ -1624,6 +1719,57 @@ export type KodiActorsAction = {
  * Language
  */
 export type Language = 'undefined' | 'unknown' | 'zh_cn' | 'zh_tw' | 'jp' | 'en';
+
+/**
+ * LeftoverItem
+ */
+export type LeftoverItem = {
+    /**
+     * Path
+     * 文件或空目录的绝对路径
+     */
+    path: string;
+    /**
+     * Size
+     * 文件大小(字节), 目录为 0
+     */
+    size?: number;
+    /**
+     * Is Video
+     * 是否视频文件(未刮成的影片, 删除前务必人工确认)
+     */
+    is_video?: boolean;
+    /**
+     * Is Dir
+     * 是否空目录
+     */
+    is_dir?: boolean;
+};
+
+/**
+ * LeftoversResponse
+ * 刮削目录残留扫描结果.
+ *
+ * 刮削成功的影片会被移走, 留下的多是下载时附带的图片/广告/NFO 等杂项;
+ * 剩下的视频文件说明没有刮成, 只列出供确认, 不参与默认勾选.
+ */
+export type LeftoversResponse = {
+    /**
+     * Videos
+     * 剩余视频文件
+     */
+    videos: Array<LeftoverItem>;
+    /**
+     * Leftovers
+     * 非视频残留(图片/nfo/空目录等)
+     */
+    leftovers: Array<LeftoverItem>;
+    /**
+     * Total Size
+     * 非视频残留总大小(字节)
+     */
+    total_size: number;
+};
 
 /**
  * MarkType
@@ -3038,6 +3184,94 @@ export type CutPosterResponses = {
 };
 
 export type CutPosterResponse = CutPosterResponses[keyof CutPosterResponses];
+
+export type GetScrapeLeftoversData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/tools/scrape-leftovers';
+};
+
+export type GetScrapeLeftoversResponses = {
+    /**
+     * Successful Response
+     */
+    200: LeftoversResponse;
+};
+
+export type GetScrapeLeftoversResponse = GetScrapeLeftoversResponses[keyof GetScrapeLeftoversResponses];
+
+export type CleanScrapeLeftoversData = {
+    body: CleanLeftoversBody;
+    path?: never;
+    query?: never;
+    url: '/api/v1/tools/scrape-leftovers/clean';
+};
+
+export type CleanScrapeLeftoversErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CleanScrapeLeftoversError = CleanScrapeLeftoversErrors[keyof CleanScrapeLeftoversErrors];
+
+export type CleanScrapeLeftoversResponses = {
+    /**
+     * Response Cleanscrapeleftovers
+     * Successful Response
+     */
+    200: {
+        [key: string]: string;
+    };
+};
+
+export type CleanScrapeLeftoversResponse = CleanScrapeLeftoversResponses[keyof CleanScrapeLeftoversResponses];
+
+export type ScanDuplicatesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/tools/duplicates';
+};
+
+export type ScanDuplicatesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DuplicatesResponse;
+};
+
+export type ScanDuplicatesResponse = ScanDuplicatesResponses[keyof ScanDuplicatesResponses];
+
+export type DeleteDuplicatesData = {
+    body: DeleteDuplicatesBody;
+    path?: never;
+    query?: never;
+    url: '/api/v1/tools/duplicates/delete';
+};
+
+export type DeleteDuplicatesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteDuplicatesError = DeleteDuplicatesErrors[keyof DeleteDuplicatesErrors];
+
+export type DeleteDuplicatesResponses = {
+    /**
+     * Response Deleteduplicates
+     * Successful Response
+     */
+    200: {
+        [key: string]: string;
+    };
+};
+
+export type DeleteDuplicatesResponse = DeleteDuplicatesResponses[keyof DeleteDuplicatesResponses];
 
 export type GetClashStatusApiV1NetworkClashGetData = {
     body?: never;

@@ -1,5 +1,5 @@
 appname               = mdcx
-version               = 1.1.0
+version               = 1.2.0
 display_name          = MDCx 刮削
 desc                  = 影片元数据刮削器: 自动识别番号、抓取元数据与封面, 生成 NFO 并整理媒体库
 platform              = x86
@@ -13,4 +13,4 @@ desktop_applaunchname = mdcx.Application
 service_port          = 8000
 checkport             = true
 ctl_stop              = true
-changelog             = 单文件刮削支持自动猜站点(URL 可留空); 首页结果记录支持删除/清空/去重, 新一轮刮削自动清空旧记录
+changelog             = 工具箱新增「刮削残留清理」与「影视库去重」: 残留确认后删除; 设置可配多个影视库, 按番号找重复副本

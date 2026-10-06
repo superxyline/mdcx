@@ -432,7 +432,8 @@ class FileScraper:
         # 获取刮削网站
         website_name = None
         if file_mode == FileMode.Single:  # 刮削单文件（工具页面）
-            website_name = Flags.website_name
+            # 未指定 URL 时返回 None, 走全站级联(自动猜站点)
+            website_name = Flags.website_name or None
         elif file_mode == FileMode.Again:  # 重新刮削
             website_temp = task_input.website_name
             if website_temp:

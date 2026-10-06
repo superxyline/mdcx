@@ -148,14 +148,16 @@ class ServerSignals:
         """发送列表名称显示"""
         try:
             data_dict = asdict(show_data)
-            result_buffer.add_result(status, str(show_data.show_name), real_number, detail=_result_detail(show_data))
+            rid = result_buffer.add_result(status, str(show_data.show_name), real_number, detail=_result_detail(show_data))
             self._broadcast_message(
-                "show_list_name", {"status": status, "show_data": data_dict, "real_number": real_number}
+                "show_list_name", {"id": rid, "status": status, "show_data": data_dict, "real_number": real_number}
             )
         except Exception as e:
             print(f"Failed to serialize ShowData in show_list_name: {e}")
-            result_buffer.add_result(status, real_number or "(未知)", real_number)
-            self._broadcast_message("show_list_name", {"status": status, "show_data": None, "real_number": real_number})
+            rid = result_buffer.add_result(status, real_number or "(未知)", real_number)
+            self._broadcast_message(
+                "show_list_name", {"id": rid, "status": status, "show_data": None, "real_number": real_number}
+            )
 
     def _emit_logs_failed_show(self, text: str):
         """发送失败日志显示"""

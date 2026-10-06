@@ -258,6 +258,22 @@ files API 真实路径列真实目录名、/etc 403 边界。飞牛已授权 `<�
 
 ---
 
+## 五f、2026-10-06 会话二（v1.2.0：刮削残留清理 + 影视库去重）
+
+1. **刮削残留清理**（工具箱卡片）：`GET /tools/scrape-leftovers` 扫 media_path 剩余文件+空目录
+   （视频=没刮成, 只列出; 非视频残留默认全选），`POST /tools/scrape-leftovers/clean` 删勾选项
+   （目录仅空才删；路径必须 resolve 在 media_path 内——实测拦下 C:/Windows 越界）。
+2. **影视库去重**：config 新增 `media_libraries: list[str]`（ServerPathDirectoryMultiple,
+   设置页自带多目录选择器，General Settings 区）；`GET /tools/duplicates` 扫描按番号分组
+   （**NFO num 优先, 否则 get_file_number 文件名解析**——文件名不同同番号实测配对成功），
+   `POST /tools/duplicates/delete` 只删"影视库目录内的视频文件"。配置更新接口是
+   `PUT /api/v1/config/`（**尾斜杠**，不带斜杠 405）。
+3. ⚠️ Bash heredoc 追加含反引号/`${}` 的 TS 代码会被 bash 吃掉截断——大段代码用 Edit/Write 工具。
+4. `fnos/mdcx/app/` 下的源码是 git 跟踪的打包快照，同步最新代码后要随提交入库。
+5. 版本 1.2.0；本地实测（残留清理、越界拦截、去重分组/删除）+ 浏览器验证全过。
+
+---
+
 ## 六、遗留事项（按优先级）
 
 1. **媒体库浏览页**：按演员/系列/日期浏览已刮影片的墙页（数据在 NFO 里），点开复用结果详情弹窗。

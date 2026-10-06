@@ -37,6 +37,7 @@ import {
   createSymlinkMutation,
   getFailedListOptions,
   getHealthReportOptions,
+  getScrapeLeftoversOptions,
   getSiteUrlsOptions,
   getSuccessListOptions,
   listActorsMutation,
@@ -47,11 +48,13 @@ import {
   moveVideosMutation,
   retryFailedListMutation,
   saveSuccessListMutation,
+  scanDuplicatesOptions,
   scrapeSingleFileMutation,
   setSiteUrlMutation,
   startScrapeMutation,
 } from "../client/@tanstack/react-query.gen";
-import type { HealthReport, Website } from "../client/types.gen";
+import { cleanScrapeLeftovers, deleteDuplicates } from "../client/sdk.gen";
+import type { DuplicatesResponse, HealthReport, LeftoversResponse, Website } from "../client/types.gen";
 import { PosterCutter } from "../components/PosterCutter";
 import { useToast } from "../contexts/ToastProvider";
 
@@ -564,6 +567,12 @@ function ToolComponent() {
         {/* 健康检查 */}
         <HealthCheckCard />
 
+        {/* 刮削残留清理 */}
+        <LeftoverCleanCard />
+
+        {/* 影视库去重 */}
+        <DuplicatesCard />
+
         {/* 剧照与主题视频 */}
         <Card>
           <CardContent>
@@ -920,6 +929,273 @@ function HealthCheckCard() {
             </List>
           </Box>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** 把字节数格式化成可读大小. */
+function formatSize(bytes: number): string {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let v = bytes;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}
+
+/** 刮削残留清理: 扫描刮削目录里刮完后剩下的杂项(图片/广告/nfo/空目录), 用户确认后删除. */
+function LeftoverCleanCard() {
+  const { showSuccess, showError } = useToast();
+  const [report, setReport] = useState<LeftoversResponse | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const leftoversQ = useQuery({ ...getScrapeLeftoversOptions(), enabled: false, queryKey: ["scrapeLeftovers"] });
+
+  const runScan = async () => {
+    try {
+      const res = await leftoversQ.refetch();
+      if (res.data) {
+        setReport(res.data);
+        // 默认全选非视频残留(含空目录); 剩余视频=未刮成的影片, 只展示不勾选
+        setSelected(new Set(res.data.leftovers.map((i) => i.path)));
+        showSuccess(`扫描完成: 残留 ${res.data.leftovers.length} 项, 未刮成视频 ${res.data.videos.length} 个`);
+      }
+    } catch (err) {
+      showError(`扫描失败: ${err}`);
+    }
+  };
+
+  const toggle = (path: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  const handleDelete = async () => {
+    setConfirmOpen(false);
+    setDeleting(true);
+    try {
+      const res = await cleanScrapeLeftovers({ body: { paths: [...selected] } });
+      showSuccess(res.data?.message ?? "清理完成");
+      await runScan();
+    } catch (err) {
+      showError(`清理失败: ${err}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          刮削残留清理
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          扫媒体路径(刮削源)里刮削后剩下的杂项: 下载附带的图片、广告、NFO、空目录等。 默认全选, 可逐项取消;
+          列出的视频文件是没刮成的影片, 不会参与删除。
+        </Typography>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 1 }}>
+          <Button variant="outlined" onClick={runScan} disabled={leftoversQ.isFetching}>
+            {leftoversQ.isFetching ? "扫描中..." : "扫描残留"}
+          </Button>
+          {report && (
+            <Chip
+              size="small"
+              color={report.leftovers.length ? "warning" : "success"}
+              label={`残留 ${report.leftovers.length} 项 · ${formatSize(report.total_size)} · 未刮成视频 ${report.videos.length}`}
+            />
+          )}
+          <Button
+            variant="contained"
+            color="error"
+            disabled={deleting || selected.size === 0}
+            onClick={() => setConfirmOpen(true)}
+          >
+            {deleting ? "删除中..." : `删除选中 (${selected.size})`}
+          </Button>
+        </Box>
+        {report && report.videos.length > 0 && (
+          <Box sx={{ mb: 1 }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              未刮成的视频(不参与删除)
+            </Typography>
+            <List dense disablePadding sx={{ maxHeight: 140, overflow: "auto" }}>
+              {report.videos.map((v) => (
+                <ListItem key={v.path} disableGutters>
+                  <ListItemText
+                    primary={v.path}
+                    secondary={formatSize(v.size)}
+                    slotProps={{
+                      primary: { sx: { wordBreak: "break-all", fontSize: 13 } },
+                      secondary: { sx: { fontSize: 12 } },
+                    }}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+        )}
+        {report && report.leftovers.length > 0 && (
+          <List dense disablePadding sx={{ maxHeight: 300, overflow: "auto" }}>
+            {report.leftovers.map((item) => (
+              <ListItem key={item.path} disableGutters dense>
+                <Checkbox size="small" checked={selected.has(item.path)} onChange={() => toggle(item.path)} />
+                <ListItemText
+                  primary={item.path}
+                  secondary={item.is_dir ? "空目录" : formatSize(item.size)}
+                  slotProps={{
+                    primary: { sx: { wordBreak: "break-all", fontSize: 13 } },
+                    secondary: { sx: { fontSize: 12 } },
+                  }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        )}
+        <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle>确认删除残留</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              将从刮削目录删除选中的 {selected.size} 项, 该操作不可恢复。确定继续吗?
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfirmOpen(false)}>取消</Button>
+            <Button variant="contained" color="error" onClick={handleDelete}>
+              删除
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** 影视库去重: 按番号(NFO 优先, 文件名解析兜底)对比所有影视库, 找出重复副本供用户选择删除. */
+function DuplicatesCard() {
+  const { showSuccess, showError } = useToast();
+  const [report, setReport] = useState<DuplicatesResponse | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const dupQ = useQuery({ ...scanDuplicatesOptions(), enabled: false, queryKey: ["duplicates"] });
+
+  const runScan = async () => {
+    try {
+      const res = await dupQ.refetch();
+      if (res.data) {
+        setReport(res.data);
+        setSelected(new Set());
+        showSuccess(`扫描完成: ${res.data.scanned} 部影片, ${res.data.groups.length} 组重复`);
+      }
+    } catch (err) {
+      showError(`扫描失败: ${err}`);
+    }
+  };
+
+  const toggle = (path: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  const handleDelete = async () => {
+    setConfirmOpen(false);
+    setDeleting(true);
+    try {
+      const res = await deleteDuplicates({ body: { paths: [...selected] } });
+      showSuccess(res.data?.message ?? "删除完成");
+      setSelected(new Set());
+      await runScan();
+    } catch (err) {
+      showError(`删除失败: ${err}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          影视库去重
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          按番号对比「设置 → 常规设置 → 影视库目录」里配置的所有库(可多个), 找出同一部影片的重复副本。 番号取自 NFO
+          或文件名解析, 文件名不同的重复也能对上。扫描范围只含影视库, 与刮削源互不影响。
+        </Typography>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 1 }}>
+          <Button variant="outlined" onClick={runScan} disabled={dupQ.isFetching}>
+            {dupQ.isFetching ? "扫描中..." : "开始去重扫描"}
+          </Button>
+          {report && (
+            <Chip
+              size="small"
+              color={report.groups.length ? "warning" : "success"}
+              label={`扫描 ${report.scanned} 部 · 重复 ${report.groups.length} 组`}
+            />
+          )}
+          <Button
+            variant="contained"
+            color="error"
+            disabled={deleting || selected.size === 0}
+            onClick={() => setConfirmOpen(true)}
+          >
+            {deleting ? "删除中..." : `删除选中副本 (${selected.size})`}
+          </Button>
+        </Box>
+        {(report?.groups ?? []).map((group) => (
+          <Box key={group.number} sx={{ mb: 1.5 }}>
+            <Typography variant="subtitle2">
+              {group.number} ({group.items.length} 个副本, 共 {formatSize(group.items.reduce((s, i) => s + i.size, 0))})
+            </Typography>
+            <List dense disablePadding sx={{ maxHeight: 200, overflow: "auto" }}>
+              {group.items.map((item) => (
+                <ListItem key={item.path} disableGutters dense>
+                  <Checkbox size="small" checked={selected.has(item.path)} onChange={() => toggle(item.path)} />
+                  <ListItemText
+                    primary={item.path}
+                    secondary={[formatSize(item.size), item.from_nfo ? "番号来自NFO" : "番号来自文件名"].join(" · ")}
+                    slotProps={{
+                      primary: { sx: { wordBreak: "break-all", fontSize: 13 } },
+                      secondary: { sx: { fontSize: 12 } },
+                    }}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+        ))}
+        <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle>确认删除副本</DialogTitle>
+          <DialogContent>
+            <DialogContentText>将删除选中的 {selected.size} 个影片副本, 该操作不可恢复。确定继续吗?</DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfirmOpen(false)}>取消</Button>
+            <Button variant="contained" color="error" onClick={handleDelete}>
+              删除
+            </Button>
+          </DialogActions>
+        </Dialog>
       </CardContent>
     </Card>
   );

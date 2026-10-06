@@ -187,6 +187,22 @@ export const CleanActionSchema = {
     showNames: ['清理指定后缀文件', '清理指定文件名', '清理包含特定字符串的文件', '清理小于指定大小的文件', '忽略指定后缀', '忽略包含特定字符串的文件', '我知道', '我同意', '自动清理']
 } as const;
 
+export const CleanLeftoversBodySchema = {
+    properties: {
+        paths: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Paths',
+            description: '确认要删除的路径列表(文件或空目录)'
+        }
+    },
+    type: 'object',
+    required: ['paths'],
+    title: 'CleanLeftoversBody'
+} as const;
+
 export const Config_InputSchema = {
     properties: {
         media_path: {
@@ -212,6 +228,23 @@ export const Config_InputSchema = {
                     initialPath: '.',
                     multiple: false,
                     refField: 'media_path',
+                    type: 'directory'
+                },
+                'ui:field': 'serverPath'
+            }
+        },
+        media_libraries: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: '影视库目录',
+            description: '工具箱「影视库去重」扫描的成品库目录, 可添加多个; 与上面的媒体路径(刮削源)互不影响',
+            default: [],
+            uiSchema: {
+                customProps: {
+                    initialPath: 'E:/codex/mdcx/media',
+                    multiple: true,
                     type: 'directory'
                 },
                 'ui:field': 'serverPath'
@@ -1110,6 +1143,23 @@ export const Config_OutputSchema = {
                     initialPath: '.',
                     multiple: false,
                     refField: 'media_path',
+                    type: 'directory'
+                },
+                'ui:field': 'serverPath'
+            }
+        },
+        media_libraries: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: '影视库目录',
+            description: '工具箱「影视库去重」扫描的成品库目录, 可添加多个; 与上面的媒体路径(刮削源)互不影响',
+            default: [],
+            uiSchema: {
+                customProps: {
+                    initialPath: 'E:/codex/mdcx/media',
+                    multiple: true,
                     type: 'directory'
                 },
                 'ui:field': 'serverPath'
@@ -2129,11 +2179,105 @@ export const CutRequestSchema = {
     title: 'CutRequest'
 } as const;
 
+export const DeleteDuplicatesBodySchema = {
+    properties: {
+        paths: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Paths',
+            description: '确认要删除的副本文件路径'
+        }
+    },
+    type: 'object',
+    required: ['paths'],
+    title: 'DeleteDuplicatesBody'
+} as const;
+
 export const DownloadableFileSchema = {
     type: 'string',
     enum: ['poster', 'thumb', 'fanart', 'extrafanart', 'trailer', 'nfo', 'extrafanart_extras', 'extrafanart_copy', 'theme_videos', 'ignore_pic_fail', 'ignore_youma', 'ignore_wuma', 'ignore_fc2', 'ignore_guochan', 'ignore_size'],
     title: 'DownloadableFile',
     showNames: ['海报', '缩略图', '剧照', '额外剧照', '预告片', 'Nfo', '额外剧照扩展', '额外剧照复制', '主题视频', '忽略图片失败', '忽略有码', '忽略无码', '忽略FC2', '忽略国产', '忽略大小']
+} as const;
+
+export const DuplicateGroupSchema = {
+    properties: {
+        number: {
+            type: 'string',
+            title: 'Number',
+            description: '番号'
+        },
+        items: {
+            items: {
+                '$ref': '#/components/schemas/DuplicateItem'
+            },
+            type: 'array',
+            title: 'Items',
+            description: '同一番号的所有副本'
+        }
+    },
+    type: 'object',
+    required: ['number', 'items'],
+    title: 'DuplicateGroup'
+} as const;
+
+export const DuplicateItemSchema = {
+    properties: {
+        path: {
+            type: 'string',
+            title: 'Path',
+            description: '视频文件路径'
+        },
+        size: {
+            type: 'integer',
+            title: 'Size',
+            description: '文件大小(字节)'
+        },
+        mtime: {
+            type: 'number',
+            title: 'Mtime',
+            description: '修改时间戳',
+            default: 0
+        },
+        from_nfo: {
+            type: 'boolean',
+            title: 'From Nfo',
+            description: '番号是否来自 NFO(比文件名解析更可靠)',
+            default: false
+        }
+    },
+    type: 'object',
+    required: ['path', 'size'],
+    title: 'DuplicateItem'
+} as const;
+
+export const DuplicatesResponseSchema = {
+    properties: {
+        scanned: {
+            type: 'integer',
+            title: 'Scanned',
+            description: '扫描到的视频文件数'
+        },
+        ungrouped: {
+            type: 'integer',
+            title: 'Ungrouped',
+            description: '识别不出番号被跳过的文件数',
+            default: 0
+        },
+        groups: {
+            items: {
+                '$ref': '#/components/schemas/DuplicateGroup'
+            },
+            type: 'array',
+            title: 'Groups',
+            description: '出现多次的番号组'
+        }
+    },
+    type: 'object',
+    required: ['scanned', 'groups'],
+    title: 'DuplicatesResponse'
 } as const;
 
 export const EmbyActionSchema = {
@@ -2368,6 +2512,70 @@ export const LanguageSchema = {
     enum: ['undefined', 'unknown', 'zh_cn', 'zh_tw', 'jp', 'en'],
     title: 'Language',
     showNames: ['UNDEFINED', 'UNKNOWN', 'ZH_CN', 'ZH_TW', 'JP', 'EN']
+} as const;
+
+export const LeftoverItemSchema = {
+    properties: {
+        path: {
+            type: 'string',
+            title: 'Path',
+            description: '文件或空目录的绝对路径'
+        },
+        size: {
+            type: 'integer',
+            title: 'Size',
+            description: '文件大小(字节), 目录为 0',
+            default: 0
+        },
+        is_video: {
+            type: 'boolean',
+            title: 'Is Video',
+            description: '是否视频文件(未刮成的影片, 删除前务必人工确认)',
+            default: false
+        },
+        is_dir: {
+            type: 'boolean',
+            title: 'Is Dir',
+            description: '是否空目录',
+            default: false
+        }
+    },
+    type: 'object',
+    required: ['path'],
+    title: 'LeftoverItem'
+} as const;
+
+export const LeftoversResponseSchema = {
+    properties: {
+        videos: {
+            items: {
+                '$ref': '#/components/schemas/LeftoverItem'
+            },
+            type: 'array',
+            title: 'Videos',
+            description: '剩余视频文件'
+        },
+        leftovers: {
+            items: {
+                '$ref': '#/components/schemas/LeftoverItem'
+            },
+            type: 'array',
+            title: 'Leftovers',
+            description: '非视频残留(图片/nfo/空目录等)'
+        },
+        total_size: {
+            type: 'integer',
+            title: 'Total Size',
+            description: '非视频残留总大小(字节)'
+        }
+    },
+    type: 'object',
+    required: ['videos', 'leftovers', 'total_size'],
+    title: 'LeftoversResponse',
+    description: `刮削目录残留扫描结果.
+
+刮削成功的影片会被移走, 留下的多是下载时附带的图片/广告/NFO 等杂项;
+剩下的视频文件说明没有刮成, 只列出供确认, 不参与默认勾选.`
 } as const;
 
 export const MarkTypeSchema = {

@@ -37,7 +37,7 @@ async def start_scrape():
 
 class ScrapeFileBody(BaseModel):
     path: str
-    url: str
+    url: str = Field(default="", description="详情页 URL，留空则按番号自动识别站点（与正常刮削一致的全站级联）")
 
 
 @router.post("/scrape/single", summary="单文件刮削", operation_id="scrapeSingleFile")
@@ -45,11 +45,16 @@ async def scrape_single(body: ScrapeFileBody):
     p = Path(body.path)
     check_path_access(p, *SAFE_DIRS)
     Flags.single_file_path = p
-    website, url = deal_url(body.url)
-    if not website:
-        raise HTTPException(status_code=400, detail="Unsupported URL")
-    Flags.appoint_url = body.url
-    Flags.website_name = website
+    if body.url.strip():
+        website, _ = deal_url(body.url)
+        if not website:
+            raise HTTPException(status_code=400, detail="Unsupported URL")
+        Flags.appoint_url = body.url
+        Flags.website_name = website
+    else:
+        # 未指定 URL: 清空指定站点, 由 _get_site 返回 None 走全站级联(自动猜站点)
+        Flags.appoint_url = ""
+        Flags.website_name = ""
     try:
         start_new_scrape(FileMode.Single)
         return {"message": "Single file scraping started."}

@@ -851,6 +851,11 @@ class Scraper:
 def start_new_scrape(file_mode: FileMode, movie_list: list[Path] | None = None) -> None:
     signal.change_buttons_status.emit()
     signal.exec_set_processbar.emit(0)
+    if file_mode == FileMode.Default:
+        # 每轮完整刮削(手动开始/定时触发)都是新一轮: 清空旧记录, 只保留本轮结果
+        from ..server.result_buffer import result_buffer
+
+        result_buffer.clear()
     try:
         Flags.start_time = time.time()
         crawler_provider = CrawlerProvider(manager.config, manager.computed.async_client)
