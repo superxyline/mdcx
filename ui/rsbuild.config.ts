@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [pluginReact()],
   html: {
     title: "MDCx 刮削",
+    favicon: "./public/favicon.png",
   },
   tools: {
     rspack: {
