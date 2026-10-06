@@ -196,7 +196,7 @@ export const Config_InputSchema = {
             default: '/media',
             uiSchema: {
                 customProps: {
-                    initialPath: 'C:/Users/13017',
+                    initialPath: 'E:/codex/mdcx/media',
                     multiple: false,
                     type: 'directory'
                 },
@@ -1094,7 +1094,7 @@ export const Config_OutputSchema = {
             default: '/media',
             uiSchema: {
                 customProps: {
-                    initialPath: 'C:/Users/13017',
+                    initialPath: 'E:/codex/mdcx/media',
                     multiple: false,
                     type: 'directory'
                 },
@@ -2467,16 +2467,23 @@ export const ScrapeFileBodySchema = {
         },
         url: {
             type: 'string',
-            title: 'Url'
+            title: 'Url',
+            description: '详情页 URL，留空则按番号自动识别站点（与正常刮削一致的全站级联）',
+            default: ''
         }
     },
     type: 'object',
-    required: ['path', 'url'],
+    required: ['path'],
     title: 'ScrapeFileBody'
 } as const;
 
 export const ScrapeResultEntrySchema = {
     properties: {
+        id: {
+            type: 'integer',
+            title: 'Id',
+            description: '记录唯一 id, 用于单条删除'
+        },
         status: {
             type: 'string',
             title: 'Status',
@@ -2513,7 +2520,7 @@ export const ScrapeResultEntrySchema = {
         }
     },
     type: 'object',
-    required: ['status', 'name', 'real_number'],
+    required: ['id', 'status', 'name', 'real_number'],
     title: 'ScrapeResultEntry'
 } as const;
 
@@ -2538,7 +2545,7 @@ export const ScrapeResultsSchema = {
     type: 'object',
     required: ['results', 'failed_details'],
     title: 'ScrapeResults',
-    description: '刮削结果明细, 服务端留存的部分 (跨重启持久化, 持续累积).'
+    description: '刮削结果明细, 服务端留存的部分 (跨重启持久化, 支持删除/清空).'
 } as const;
 
 export const ScrapeStatusSchema = {

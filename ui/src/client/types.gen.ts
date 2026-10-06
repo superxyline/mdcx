@@ -1712,14 +1712,20 @@ export type ScrapeFileBody = {
     path: string;
     /**
      * Url
+     * 详情页 URL，留空则按番号自动识别站点（与正常刮削一致的全站级联）
      */
-    url: string;
+    url?: string;
 };
 
 /**
  * ScrapeResultEntry
  */
 export type ScrapeResultEntry = {
+    /**
+     * Id
+     * 记录唯一 id, 用于单条删除
+     */
+    id: number;
     /**
      * Status
      * "succ" 或 "fail"
@@ -1751,7 +1757,7 @@ export type ScrapeResultEntry = {
 
 /**
  * ScrapeResults
- * 刮削结果明细, 服务端留存的部分 (跨重启持久化, 持续累积).
+ * 刮削结果明细, 服务端留存的部分 (跨重启持久化, 支持删除/清空).
  */
 export type ScrapeResults = {
     /**
@@ -2433,6 +2439,39 @@ export type SetSiteUrlResponses = {
     200: unknown;
 };
 
+export type ClearScrapeResultsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         */
+        status?: string | null;
+    };
+    url: '/api/v1/scrape/results';
+};
+
+export type ClearScrapeResultsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ClearScrapeResultsError = ClearScrapeResultsErrors[keyof ClearScrapeResultsErrors];
+
+export type ClearScrapeResultsResponses = {
+    /**
+     * Response Clearscraperesults
+     * Successful Response
+     */
+    200: {
+        [key: string]: string;
+    };
+};
+
+export type ClearScrapeResultsResponse = ClearScrapeResultsResponses[keyof ClearScrapeResultsResponses];
+
 export type GetScrapeResultsData = {
     body?: never;
     path?: never;
@@ -2448,6 +2487,39 @@ export type GetScrapeResultsResponses = {
 };
 
 export type GetScrapeResultsResponse = GetScrapeResultsResponses[keyof GetScrapeResultsResponses];
+
+export type DeleteScrapeResultData = {
+    body?: never;
+    path: {
+        /**
+         * Item Id
+         */
+        item_id: number;
+    };
+    query?: never;
+    url: '/api/v1/scrape/results/{item_id}';
+};
+
+export type DeleteScrapeResultErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteScrapeResultError = DeleteScrapeResultErrors[keyof DeleteScrapeResultErrors];
+
+export type DeleteScrapeResultResponses = {
+    /**
+     * Response Deletescraperesult
+     * Successful Response
+     */
+    200: {
+        [key: string]: string;
+    };
+};
+
+export type DeleteScrapeResultResponse = DeleteScrapeResultResponses[keyof DeleteScrapeResultResponses];
 
 export type BackfillHistoryData = {
     body?: never;

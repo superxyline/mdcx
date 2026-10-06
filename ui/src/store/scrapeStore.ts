@@ -35,7 +35,7 @@ export interface FailedDetail {
 }
 
 export interface ScrapeListItem {
-  /** 唯一键, 用于列表渲染 */
+  /** 唯一键; 来自后端的记录为数字 id 字符串 (用于单条删除), 本地兜底为 r{n} */
   id: string;
   /** 显示名称 */
   name: string;
@@ -75,7 +75,10 @@ interface ScrapeState {
   handleQtSignal: (msg: WebSocketMessage<LogEntry>) => void;
   /** 页面加载时拉取服务端留存的结果明细, 补回浏览器关闭期间错过的推送 */
   loadHistory: () => Promise<void>;
-  clearResults: () => void;
+  /** 删除单条记录 (本地同步, 调用方负责请求后端) */
+  removeResult: (id: string) => void;
+  /** 清空记录: 不带参清全部, "succ"/"fail" 只清对应列表 (本地同步, 调用方负责请求后端) */
+  clearResults: (status?: "succ" | "fail") => void;
 }
 
 /** 最多保留的结果条目数, 防止长时间刮削撑爆内存 */
@@ -183,12 +186,12 @@ export const useScrapeStore = create<ScrapeState>()(
           break;
 
         case "show_list_name": {
-          // 结构: { status: "succ" | "fail", show_data: {...}, real_number: string }
+          // 结构: { id: number, status: "succ" | "fail", show_data: {...}, real_number: string }
           if (!data || typeof data !== "object") break;
-          const payload = data as { status?: string; show_data?: unknown; real_number?: string };
+          const payload = data as { id?: number; status?: string; show_data?: unknown; real_number?: string };
           const showData = payload.show_data as { show_name?: string } | null;
           const item: ScrapeListItem = {
-            id: nextId(),
+            id: typeof payload.id === "number" ? String(payload.id) : nextId(),
             name: showData?.show_name ?? payload.real_number ?? "(未知)",
             status: payload.status === "succ" ? "succ" : "fail",
             realNumber: payload.real_number ?? "",
@@ -226,7 +229,7 @@ export const useScrapeStore = create<ScrapeState>()(
         set((state) => {
           // 历史条目在前, 拉取期间可能已有少量实时条目进来, 保持在后面
           const history = data.results.map((r) => ({
-            id: nextId(),
+            id: String(r.id),
             name: r.name,
             status: r.status === "succ" ? ("succ" as const) : ("fail" as const),
             realNumber: r.real_number,
@@ -246,6 +249,20 @@ export const useScrapeStore = create<ScrapeState>()(
       }
     },
 
-    clearResults: () => set({ results: [], failedDetails: [] }),
+    removeResult: (id) => set((state) => ({ results: state.results.filter((r) => r.id !== id) })),
+
+    clearResults: (status) => {
+      if (!status) {
+        set({ results: [], failedDetails: [] });
+      } else if (status === "succ") {
+        set((state) => ({ results: state.results.filter((r) => r.status !== "succ") }));
+      } else {
+        // 清空失败列表时失败原因明细一并清空 (两者同为失败产物)
+        set((state) => ({
+          results: state.results.filter((r) => r.status !== "fail"),
+          failedDetails: [],
+        }));
+      }
+    },
   })),
 );

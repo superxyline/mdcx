@@ -121,6 +121,7 @@ class ScrapeStatus(BaseModel):
 
 
 class ScrapeResultEntry(BaseModel):
+    id: int = Field(description="记录唯一 id, 用于单条删除")
     status: str = Field(description='"succ" 或 "fail"')
     name: str = Field(description="列表显示名")
     real_number: str = Field(description="识别出的番号")
@@ -129,7 +130,7 @@ class ScrapeResultEntry(BaseModel):
 
 
 class ScrapeResults(BaseModel):
-    """刮削结果明细, 服务端留存的部分 (跨重启持久化, 持续累积)."""
+    """刮削结果明细, 服务端留存的部分 (跨重启持久化, 支持删除/清空)."""
 
     results: list[ScrapeResultEntry]
     failed_details: list[str] = Field(description="失败原因明细, 与 results 中 fail 条目按时间对应")
@@ -142,12 +143,28 @@ async def get_scrape_results() -> ScrapeResults:
     return ScrapeResults(
         results=[
             ScrapeResultEntry(
-                status=r.status, name=r.name, real_number=r.real_number, ts=r.ts, detail=r.detail
+                id=r.id, status=r.status, name=r.name, real_number=r.real_number, ts=r.ts, detail=r.detail
             )
             for r in results
         ],
         failed_details=failed_details,
     )
+
+
+@router.delete("/results/{item_id}", operation_id="deleteScrapeResult", summary="删除单条刮削记录")
+async def delete_scrape_result(item_id: int) -> dict[str, str]:
+    if not result_buffer.remove_result(item_id):
+        raise HTTPException(status_code=404, detail="记录不存在或已被删除.")
+    return {"message": "已删除该条记录."}
+
+
+@router.delete("/results", operation_id="clearScrapeResults", summary="清空刮削记录")
+async def clear_scrape_results(status: str | None = None) -> dict[str, str]:
+    """清空记录, 不带参数清全部; ``status=succ`` / ``status=fail`` 只清对应列表."""
+    if status not in (None, "succ", "fail"):
+        raise HTTPException(status_code=400, detail="status 只支持 succ / fail / 不传.")
+    result_buffer.clear(status)
+    return {"message": "已清空记录."}
 
 
 class BackfillResponse(BaseModel):

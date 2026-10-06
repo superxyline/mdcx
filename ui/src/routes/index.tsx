@@ -15,6 +15,7 @@
 // 无法识别全部命名导出, barrel 导入会报 "export not found"
 import CheckCircleOutlined from "@mui/icons-material/CheckCircleOutlined";
 import CloudSyncOutlined from "@mui/icons-material/CloudSyncOutlined";
+import DeleteOutlined from "@mui/icons-material/DeleteOutlined";
 import ErrorOutlined from "@mui/icons-material/ErrorOutlined";
 import FolderOpen from "@mui/icons-material/FolderOpen";
 import PlayArrow from "@mui/icons-material/PlayArrow";
@@ -31,6 +32,7 @@ import {
   DialogContentText,
   DialogTitle,
   Divider,
+  IconButton,
   LinearProgress,
   List,
   ListItemButton,
@@ -49,7 +51,7 @@ import {
   getCurrentConfigOptions,
   retryFailedListMutation,
 } from "@/client/@tanstack/react-query.gen";
-import { getScrapeStatus, startScrape, stopScrape } from "@/client/sdk.gen";
+import { clearScrapeResults, deleteScrapeResult, getScrapeStatus, startScrape, stopScrape } from "@/client/sdk.gen";
 import { PosterThumb, ResultDetailDialog } from "@/components/ResultDetail";
 import { WizardDialog } from "@/components/WizardDialog";
 import { useToast } from "@/contexts/ToastProvider";
@@ -108,6 +110,7 @@ function ScrapePage() {
 
   const [mediaPath, setMediaPath] = useState("");
   const [confirmStop, setConfirmStop] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState(0);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -188,6 +191,30 @@ function ScrapePage() {
       setBusy(false);
     }
   }, []);
+
+  const handleDeleteItem = useCallback(
+    async (item: ScrapeListItem) => {
+      try {
+        await deleteScrapeResult({ path: { item_id: Number(item.id) } });
+        useScrapeStore.getState().removeResult(item.id);
+      } catch (err) {
+        showError(`删除失败: ${err}`);
+      }
+    },
+    [showError],
+  );
+
+  const handleClear = useCallback(async () => {
+    setConfirmClear(false);
+    const status = tab === 0 ? ("succ" as const) : ("fail" as const);
+    try {
+      await clearScrapeResults({ query: { status } });
+      useScrapeStore.getState().clearResults(status);
+      showSuccess(`已清空${tab === 0 ? "成功" : "失败"}记录`);
+    } catch (err) {
+      showError(`清空失败: ${err}`);
+    }
+  }, [tab, showSuccess, showError]);
 
   const successItems = useMemo(() => results.filter((r) => r.status === "succ"), [results]);
   const failedItems = useMemo(() => results.filter((r) => r.status === "fail"), [results]);
@@ -296,6 +323,17 @@ function ScrapePage() {
             <Button
               size="small"
               variant="outlined"
+              color="error"
+              startIcon={<DeleteOutlined />}
+              disabled={listedItems.length === 0}
+              onClick={() => setConfirmClear(true)}
+              sx={{ mr: 1 }}
+            >
+              清空
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
               startIcon={<CloudSyncOutlined />}
               disabled={backfillMut.isPending}
               onClick={() =>
@@ -344,6 +382,17 @@ function ScrapePage() {
                     slotProps={{ primary: { variant: "body2" }, secondary: { variant: "caption" } }}
                     sx={{ ml: 1 }}
                   />
+                  <IconButton
+                    size="small"
+                    edge="end"
+                    aria-label="删除记录"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDeleteItem(item);
+                    }}
+                  >
+                    <DeleteOutlined fontSize="small" />
+                  </IconButton>
                 </ListItemButton>
               ))}
             </List>
@@ -376,6 +425,21 @@ function ScrapePage() {
           <Button onClick={() => setConfirmStop(false)}>取消</Button>
           <Button variant="contained" color="error" onClick={handleStop}>
             停止刮削
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmClear} onClose={() => setConfirmClear(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>清空记录</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            确定要清空当前列表的{tab === 0 ? "成功" : "失败"}记录吗？该操作不可恢复（含服务端留存的记录）。
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmClear(false)}>取消</Button>
+          <Button variant="contained" color="error" onClick={handleClear}>
+            清空
           </Button>
         </DialogActions>
       </Dialog>

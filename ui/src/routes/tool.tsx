@@ -156,8 +156,8 @@ function ToolComponent() {
   };
 
   const handleScrapeSingleFile = async () => {
-    if (!singleFilePath || !singleFileUrl) {
-      showError("请输入文件路径和URL");
+    if (!singleFilePath) {
+      showError("请输入文件路径");
       return;
     }
     showInfo("正在启动单文件刮削任务...");
@@ -446,9 +446,10 @@ function ToolComponent() {
                   sx={{ flexGrow: 1, minWidth: 200 }}
                 />
                 <TextField
-                  label="URL"
+                  label="URL（可选）"
                   value={singleFileUrl}
                   onChange={(e) => setSingleFileUrl(e.target.value)}
+                  placeholder="留空自动按番号猜站点"
                   size="small"
                   sx={{ flexGrow: 1, minWidth: 200 }}
                 />
