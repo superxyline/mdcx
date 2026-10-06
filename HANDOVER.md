@@ -237,14 +237,34 @@ files API 真实路径列真实目录名、/etc 403 边界。飞牛已授权 `<�
 
 ---
 
+## 五e、2026-10-06 会话（v1.1.0：自动猜站点 + 记录管理 + FPK 升级坑）
+
+1. **单文件刮削"自动猜站点"**：`POST /legacy/scrape/single` 的 `url` 改可选，留空走全站级联
+   （`_get_site` 返回 None 接上 `_crawl` 的番号规则+字段级联引擎）；认不出的 URL 仍 400。
+2. **结果记录管理**：记录带自增 id（持久化 jsonl，旧记录加载时补号）；
+   `DELETE /scrape/results/{id}` 删单条、`DELETE /scrape/results?status=succ|fail` 清列表
+   （删/清都**原子重写** jsonl）；同影片（番号优先/显示名兜底）只留最新一条，
+   去重发生时也必须重写 jsonl（否则重启复活——实测踩过）；每轮完整刮削
+   （`start_new_scrape(FileMode.Default)`，含定时）清空全部旧记录，单文件/重试失败只追加。
+3. **FPK 升级坑（重要）**：`appcenter-cli install-fpk` 报 "is installed" **但不覆盖
+   /vol3/@appcenter/mdcx 下的应用文件，且旧 uvicorn 进程不死**，checkport 探到 8000 通
+   误判启动成功。正确升级姿势：stop → 杀掉旧 uvicorn/mihomo 进程 → 解包 FPK
+   （gzip 的 tar，`app.tgz` 直接展开到应用目录根，cmd/manifest 拷进去，chmod +x cmd/*）→ start。
+   另外 `.gitignore` 的 `MANIFEST` 规则会误伤 fnos 工程的 manifest（已加 `!fnos/mdcx/manifest`）。
+4. **刮削"卡死"定性**：代理节点失联时刮削不是挂死，而是全超时慢速爬行
+   （timeout10s×retry3×多站点级联，10 文件并发可爬 20 分钟 0 完成），看起来像卡死；
+   mihomo 日志里 `my-sub pull error` + 节点 i/o timeout 是信号，面板换节点即解。
+5. 版本 1.1.0（manifest 已入库），commit deb4a2c + 1db0fda，README 特性表同步，双 commit 已推 GitHub。
+
+---
+
 ## 六、遗留事项（按优先级）
 
 1. **媒体库浏览页**：按演员/系列/日期浏览已刮影片的墙页（数据在 NFO 里），点开复用结果详情弹窗。
 2. **硬链接整理模式**：现有软链接在源路径变化时断，硬链接更适合单独挂媒体服务器的场景。
-3. 单文件刮削接口必须传 URL，小白不友好——可做成"自动猜站点"。
-4. **删 GitHub 旧 tag** `pre-20240311`、`python3.13`（仍指旧敏感历史；网页删最快，
+3. **删 GitHub 旧 tag** `pre-20240311`、`python3.13`（仍指旧敏感历史；网页删最快，
    或 token 加 `workflow` scope 后本地强推）。
-5. **Docker compose"别人开箱即装"改造**（预构建镜像发布 + .env 参数化 + Clash 自动生成）：
+4. **Docker compose"别人开箱即装"改造**（预构建镜像发布 + .env 参数化 + Clash 自动生成）：
    2026-09-25 给过完整方案，**用户决定暂不做**，方案见当次会话/README，重启时先问。
 6. ~~刮削前预览确认~~ / ~~访问密码引导~~ / ~~失败记录跨重启~~ / ~~Clash 内网直连~~（2026-09-22 已完成）
 
