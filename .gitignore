@@ -186,3 +186,6 @@ dev/
 fnos/*.fpk
 fnos/mdcx/app/runtime/uv
 fnos/mdcx/app/clash-runtime/mihomo
+
+# fnOS FPK 工程的 manifest 是源文件, 不受上面 MANIFEST/*.manifest 规则影响
+!fnos/mdcx/manifest
