@@ -271,6 +271,8 @@ files API 真实路径列真实目录名、/etc 403 边界。飞牛已授权 `<�
 3. ⚠️ Bash heredoc 追加含反引号/`${}` 的 TS 代码会被 bash 吃掉截断——大段代码用 Edit/Write 工具。
 4. `fnos/mdcx/app/` 下的源码是 git 跟踪的打包快照，同步最新代码后要随提交入库。
 5. 版本 1.2.0；本地实测（残留清理、越界拦截、去重分组/删除）+ 浏览器验证全过。
+6. 页面标题：rsbuild 默认模板导致标签页显示 "Rsbuild App"，已在 `ui/rsbuild.config.ts` 加
+   `html.title: "MDCx 刮削"`；纯前端小改动可只把 `ui/dist` 同步到 NAS 应用目录，不必重打 FPK。
 
 ---
 

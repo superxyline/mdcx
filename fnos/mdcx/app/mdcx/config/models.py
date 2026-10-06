@@ -31,7 +31,7 @@ from .enums import (
     Translator,
     Website,
 )
-from .ui_schema import ServerPathDirectory, extract_ui_schema_recursive
+from .ui_schema import ServerPathDirectory, ServerPathDirectoryMultiple, extract_ui_schema_recursive
 
 
 def str_to_list(v: str | list[Any] | None, sep: Literal[",", "|"] = ",", unique: bool = True) -> list[str]:
@@ -103,6 +103,12 @@ class Config(BaseModel):
         initial_path=SAFE_DIRS[0].as_posix(),
     )
     softlink_path: str = ServerPathDirectory("softlink", title="软链接路径", ref_field="media_path")
+    media_libraries: list[str] = ServerPathDirectoryMultiple(
+        [],
+        title="影视库目录",
+        description="工具箱「影视库去重」扫描的成品库目录, 可添加多个; 与上面的媒体路径(刮削源)互不影响",
+        initial_path=SAFE_DIRS[0].as_posix(),
+    )
     success_output_folder: str = ServerPathDirectory(
         "JAV_output",
         title="成功输出目录",
@@ -447,9 +453,7 @@ class Config(BaseModel):
             ),
             CrawlerResultFields.THUMB: FieldConfig(site_prority=[Website.JAVBUS, Website.DMM, Website.THEPORNDB]),
             CrawlerResultFields.POSTER: FieldConfig(site_prority=[Website.JAVBUS, Website.DMM, Website.THEPORNDB]),
-            CrawlerResultFields.EXTRAFANART: FieldConfig(
-                site_prority=[Website.JAVBUS, Website.DMM, Website.THEPORNDB]
-            ),
+            CrawlerResultFields.EXTRAFANART: FieldConfig(site_prority=[Website.JAVBUS, Website.DMM, Website.THEPORNDB]),
             CrawlerResultFields.TRAILER: FieldConfig(
                 site_prority=[Website.OFFICIAL, Website.JAVBUS, Website.JAV321, Website.JAVDB, Website.DMM]
             ),

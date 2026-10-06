@@ -4,6 +4,9 @@ import { tanstackRouter } from "@tanstack/router-plugin/rspack";
 
 export default defineConfig({
   plugins: [pluginReact()],
+  html: {
+    title: "MDCx 刮削",
+  },
   tools: {
     rspack: {
       plugins: [tanstackRouter({ target: "react", autoCodeSplitting: true })],

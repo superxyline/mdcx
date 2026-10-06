@@ -28,6 +28,7 @@ from mdcx.core.file import get_file_info_v2
 from mdcx.core.scraper import start_new_scrape
 from mdcx.models.enums import FileMode
 from mdcx.models.flags import Flags
+from mdcx.number import get_file_number
 from mdcx.server.config import SAFE_DIRS
 from mdcx.signals import signal
 from mdcx.tools.emby_actor_info import creat_kodi_actors, show_emby_actor_list
@@ -126,7 +127,9 @@ async def check_missing() -> dict[str, str]:
 
 class HealthIssue(BaseModel):
     path: str = Field(description="相关文件路径 (视频或 NFO)")
-    missing: list[str] = Field(description="缺失的内容: nfo / poster / fanart / title / releasedate / actor / nfo_invalid")
+    missing: list[str] = Field(
+        description="缺失的内容: nfo / poster / fanart / title / releasedate / actor / nfo_invalid"
+    )
 
 
 class HealthReport(BaseModel):
@@ -463,3 +466,244 @@ async def cut_poster_api(body: CutRequest) -> dict[str, str]:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"message": "裁剪完成", **result}
+
+
+# ---------------------------------------------------------------- 刮削残留清理
+
+MAX_LEFTOVER_SCAN = 20000
+
+
+class LeftoverItem(BaseModel):
+    path: str = Field(description="文件或空目录的绝对路径")
+    size: int = Field(default=0, description="文件大小(字节), 目录为 0")
+    is_video: bool = Field(default=False, description="是否视频文件(未刮成的影片, 删除前务必人工确认)")
+    is_dir: bool = Field(default=False, description="是否空目录")
+
+
+class LeftoversResponse(BaseModel):
+    """刮削目录残留扫描结果.
+
+    刮削成功的影片会被移走, 留下的多是下载时附带的图片/广告/NFO 等杂项;
+    剩下的视频文件说明没有刮成, 只列出供确认, 不参与默认勾选.
+    """
+
+    videos: list[LeftoverItem] = Field(description="剩余视频文件")
+    leftovers: list[LeftoverItem] = Field(description="非视频残留(图片/nfo/空目录等)")
+    total_size: int = Field(description="非视频残留总大小(字节)")
+
+
+def _scan_leftovers(media_path: Path, video_exts: set[str]) -> LeftoversResponse:
+    videos: list[LeftoverItem] = []
+    leftovers: list[LeftoverItem] = []
+    total = 0
+    count = 0
+    for root, _dirs, files in media_path.walk():
+        for f in files:
+            if count >= MAX_LEFTOVER_SCAN:
+                return LeftoversResponse(videos=videos, leftovers=leftovers, total_size=total)
+            count += 1
+            p = root / f
+            try:
+                size = p.stat().st_size
+            except OSError:
+                continue
+            is_video = p.suffix.lower() in video_exts
+            item = LeftoverItem(path=str(p), size=size, is_video=is_video)
+            if is_video:
+                videos.append(item)
+            else:
+                leftovers.append(item)
+                total += size
+    return LeftoversResponse(videos=videos, leftovers=leftovers, total_size=total)
+
+
+def _find_empty_dirs(media_path: Path) -> list[Path]:
+    empties: list[Path] = []
+    for root, dirs, files in media_path.walk(top_down=False):
+        if not dirs and not files:
+            empties.append(root)
+    return empties
+
+
+@router.get("/scrape-leftovers", operation_id="getScrapeLeftovers", summary="扫描刮削目录残留")
+async def get_scrape_leftovers() -> LeftoversResponse:
+    """递归扫描媒体路径(刮削源)下刮削后剩下的文件与空目录.
+
+    只读不改; 实际删除走 /scrape-leftovers/clean, 由用户在界面上确认后提交.
+    """
+    media_path = Path(manager.config.media_path or ".")
+    if not media_path.is_dir():
+        raise HTTPException(status_code=400, detail=f"刮削目录不存在: {media_path}")
+    video_exts = {e.lower() if e.startswith(".") else f".{e.lower()}" for e in manager.config.media_type}
+    result = await asyncio.to_thread(_scan_leftovers, media_path, video_exts)
+    empties = await asyncio.to_thread(_find_empty_dirs, media_path)
+    result.leftovers.extend(LeftoverItem(path=str(d), size=0, is_video=False, is_dir=True) for d in empties)
+    return result
+
+
+class CleanLeftoversBody(BaseModel):
+    paths: list[str] = Field(description="确认要删除的路径列表(文件或空目录)")
+
+
+@router.post("/scrape-leftovers/clean", operation_id="cleanScrapeLeftovers", summary="删除刮削目录残留")
+async def clean_scrape_leftovers(body: CleanLeftoversBody) -> dict[str, str]:
+    """删除用户在界面上确认过的残留路径.
+
+    只接受媒体路径之内的路径; 目录仅当已为空才会被删除, 防止误删整棵子树.
+    """
+    media_path = Path(manager.config.media_path or ".").resolve()
+    if not media_path.is_dir():
+        raise HTTPException(status_code=400, detail=f"刮削目录不存在: {media_path}")
+    deleted, failed = 0, 0
+
+    def _clean() -> tuple[int, int]:
+        nonlocal deleted, failed
+        for raw in body.paths:
+            p = Path(raw)
+            try:
+                if not p.resolve().is_relative_to(media_path):
+                    raise ValueError("路径不在刮削目录内")
+                if p.is_dir():
+                    p.rmdir()  # 非空目录会抛 OSError, 视为失败
+                elif p.is_file():
+                    p.unlink()
+                else:
+                    raise FileNotFoundError(raw)
+                deleted += 1
+            except Exception:
+                failed += 1
+        return deleted, failed
+
+    await asyncio.to_thread(_clean)
+    return {"message": f"已删除 {deleted} 项, 失败 {failed} 项(非空目录/被占用等)."}
+
+
+# ---------------------------------------------------------------- 影视库去重
+
+MAX_DUPLICATE_SCAN = 50000
+
+
+class DuplicateItem(BaseModel):
+    path: str = Field(description="视频文件路径")
+    size: int = Field(description="文件大小(字节)")
+    mtime: float = Field(default=0, description="修改时间戳")
+    from_nfo: bool = Field(default=False, description="番号是否来自 NFO(比文件名解析更可靠)")
+
+
+class DuplicateGroup(BaseModel):
+    number: str = Field(description="番号")
+    items: list[DuplicateItem] = Field(description="同一番号的所有副本")
+
+
+class DuplicatesResponse(BaseModel):
+    scanned: int = Field(description="扫描到的视频文件数")
+    ungrouped: int = Field(default=0, description="识别不出番号被跳过的文件数")
+    groups: list[DuplicateGroup] = Field(description="出现多次的番号组")
+
+
+def _number_for_video(video: Path) -> tuple[str, bool]:
+    """番号: 优先读同目录同名 NFO 里的 num/number, 否则按文件名解析(与刮削同一套规则)."""
+    nfo = video.with_suffix(".nfo")
+    if nfo.is_file():
+        try:
+            root = ET.parse(nfo).getroot()
+            for tag in ("num", "number"):
+                el = root.find(tag)
+                if el is not None and el.text and el.text.strip():
+                    return el.text.strip().upper(), True
+        except Exception:
+            pass
+    try:
+        number = get_file_number(str(video), manager.computed.escape_string_list)
+    except Exception:
+        number = ""
+    return (number or "").strip().upper(), False
+
+
+def _scan_duplicates(roots: list[Path], video_exts: set[str]) -> DuplicatesResponse:
+    buckets: dict[str, list[DuplicateItem]] = {}
+    scanned = 0
+    ungrouped = 0
+    for root_dir in roots:
+        for cur, _dirs, files in root_dir.walk():
+            for f in files:
+                if scanned >= MAX_DUPLICATE_SCAN:
+                    return DuplicatesResponse(scanned=scanned, ungrouped=ungrouped, groups=[])
+                p = cur / f
+                if p.suffix.lower() not in video_exts:
+                    continue
+                scanned += 1
+                try:
+                    st = p.stat()
+                except OSError:
+                    continue
+                number, from_nfo = _number_for_video(p)
+                if not number:
+                    ungrouped += 1
+                    continue
+                buckets.setdefault(number, []).append(
+                    DuplicateItem(path=str(p), size=st.st_size, mtime=st.st_mtime, from_nfo=from_nfo)
+                )
+    groups = [DuplicateGroup(number=n, items=items) for n, items in buckets.items() if len(items) > 1]
+    groups.sort(key=lambda g: -sum(i.size for i in g.items))
+    return DuplicatesResponse(scanned=scanned, ungrouped=ungrouped, groups=groups)
+
+
+def _library_roots() -> list[Path]:
+    roots: list[Path] = []
+    for raw in manager.config.media_libraries or []:
+        p = Path(raw)
+        if p.is_dir() and p.resolve() not in {r.resolve() for r in roots}:
+            roots.append(p)
+    return roots
+
+
+@router.get("/duplicates", operation_id="scanDuplicates", summary="扫描影视库重复影片")
+async def scan_duplicates() -> DuplicatesResponse:
+    """按番号对比设置里配置的所有影视库目录, 找出同一番号的多个副本.
+
+    番号取自 NFO(优先)或文件名解析(与刮削同一套识别规则), 因此文件名不同的
+    重复也能对上; 扫描只读, 删除走 /duplicates/delete.
+    """
+    roots = _library_roots()
+    if not roots:
+        raise HTTPException(
+            status_code=400,
+            detail="尚未配置影视库目录, 请先到 设置 → 常规设置 → 影视库目录 添加(可多个).",
+        )
+    video_exts = {e.lower() if e.startswith(".") else f".{e.lower()}" for e in manager.config.media_type}
+    return await asyncio.to_thread(_scan_duplicates, roots, video_exts)
+
+
+class DeleteDuplicatesBody(BaseModel):
+    paths: list[str] = Field(description="确认要删除的副本文件路径")
+
+
+@router.post("/duplicates/delete", operation_id="deleteDuplicates", summary="删除重复影片副本")
+async def delete_duplicates(body: DeleteDuplicatesBody) -> dict[str, str]:
+    """删除用户勾选确认的副本文件; 只接受已配置影视库目录之内的视频文件."""
+    roots = _library_roots()
+    if not roots:
+        raise HTTPException(status_code=400, detail="尚未配置影视库目录, 请先在设置里添加.")
+    resolved_roots = [r.resolve() for r in roots]
+    video_exts = {e.lower() if e.startswith(".") else f".{e.lower()}" for e in manager.config.media_type}
+    deleted, failed = 0, 0
+
+    def _delete() -> tuple[int, int]:
+        nonlocal deleted, failed
+        for raw in body.paths:
+            p = Path(raw)
+            try:
+                rp = p.resolve()
+                if not any(rp.is_relative_to(r) for r in resolved_roots):
+                    raise ValueError("路径不在影视库目录内")
+                if not p.is_file() or p.suffix.lower() not in video_exts:
+                    raise ValueError("只允许删除扫描结果里的视频文件")
+                p.unlink()
+                deleted += 1
+            except Exception:
+                failed += 1
+        return deleted, failed
+
+    await asyncio.to_thread(_delete)
+    return {"message": f"已删除 {deleted} 个副本, 失败 {failed} 个."}
