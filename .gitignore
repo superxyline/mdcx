@@ -189,3 +189,8 @@ fnos/mdcx/app/clash-runtime/mihomo
 
 # fnOS FPK 工程的 manifest 是源文件, 不受上面 MANIFEST/*.manifest 规则影响
 !fnos/mdcx/manifest
+
+# 刮削定时状态(运行时生成)
+timed_scrape.json
+scrape_history.jsonl
+failed_list.json
