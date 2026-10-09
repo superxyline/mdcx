@@ -131,7 +131,7 @@ export function ResultDetailDialog({ item, onClose }: { item: ScrapeListItem | n
         {detail?.mosaic && <Chip size="small" label={detail.mosaic} variant="outlined" />}
       </DialogTitle>
       <DialogContent>
-        <Stack direction="row" spacing={2.5} alignItems="flex-start" flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={2.5} alignItems="flex-start" useFlexGap sx={{ flexWrap: "wrap", rowGap: 2 }}>
           <Box sx={{ width: 240, minHeight: 200 }}>
             {url ? (
               <Box component="img" src={url} alt="" sx={{ width: "100%", borderRadius: 1 }} />

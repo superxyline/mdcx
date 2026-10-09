@@ -16,8 +16,11 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
 import type { IChangeEvent } from "@rjsf/core";
 import { Form } from "@rjsf/mui";
@@ -415,15 +418,18 @@ function ConfigManagerBar({ onConfigReplaced }: { onConfigReplaced: (next: Confi
   );
 
   return (
-    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-      <Typography variant="h4">设置</Typography>
-      {current && <Chip size="small" label={`当前: ${current}`} variant="outlined" />}
-      <Box flexGrow={1} />
+    <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap sx={{ mb: 2, flexWrap: "wrap", rowGap: 1 }}>
+      <Typography variant="h4" sx={{ flexShrink: 0 }}>
+        设置
+      </Typography>
+      {current && <Chip size="small" label={`当前: ${current}`} variant="outlined" sx={{ flexShrink: 0 }} />}
+      {/* 窄屏隐藏占位 spacer, 让按钮自然换行而不被推到视口外 */}
+      <Box flexGrow={1} sx={{ display: { xs: "none", sm: "block" } }} />
       <TextField
         select
         size="small"
         label="配置文件"
-        sx={{ minWidth: 160 }}
+        sx={{ minWidth: 160, flexShrink: 0 }}
         value={selected}
         onChange={(e) => setSelected(e.target.value)}
         disabled={busy}
@@ -532,7 +538,21 @@ function SettingsComponent() {
     [uiSchemaQ.data, shownFields, allFieldNames],
   );
 
-  const sectionNav = (
+  // 窄屏: 左侧竖排导航放不下, 改为顶部可横向滑动的选项条, 表单独占整行
+  const isNarrow = useMediaQuery("(max-width:900px)");
+  const sectionNav = isNarrow ? (
+    <Tabs
+      value={activeKey}
+      onChange={(_, v: string) => setActiveKey(v)}
+      variant="scrollable"
+      allowScrollButtonsMobile
+      sx={{ mb: 1, borderBottom: 1, borderColor: "divider", minHeight: 40 }}
+    >
+      {SECTIONS.map((s) => (
+        <Tab key={s.key} value={s.key} label={s.label} sx={{ minHeight: 40, textTransform: "none" }} />
+      ))}
+    </Tabs>
+  ) : (
     <Paper
       variant="outlined"
       sx={{
@@ -604,9 +624,9 @@ function SettingsComponent() {
             setBaseline(stableStringify(next));
           }}
         />
-        <Stack direction="row" spacing={2} alignItems="flex-start">
+        <Stack direction={isNarrow ? "column" : "row"} spacing={2} alignItems="flex-start">
           {sectionNav}
-          <Box flexGrow={1} minWidth={0}>
+          <Box flexGrow={1} minWidth={0} sx={{ width: "100%" }}>
             {activeSection && (
               <Box>
                 <Typography variant="h5" sx={{ mb: 0.5 }}>

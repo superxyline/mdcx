@@ -42,6 +42,7 @@ import {
   Tab,
   Tabs,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link as RouterLink } from "@tanstack/react-router";
@@ -82,7 +83,7 @@ function formatTime(ts: number): string {
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <Stack spacing={0.5}>
+    <Stack spacing={0.5} sx={{ flexShrink: 0, minWidth: 64 }}>
       <Typography variant="caption" color="text.secondary">
         {label}
       </Typography>
@@ -92,6 +93,8 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 }
 
 function ScrapePage() {
+  // 窄屏: 标题按钮行/页签行改纵向排布, 避免按钮被挤出可视区
+  const isNarrow = useMediaQuery("(max-width:600px)");
   const running = useScrapeStore((s) => s.running);
   const progress = useScrapeStore((s) => s.progress);
   const total = useScrapeStore((s) => s.total);
@@ -225,14 +228,13 @@ function ScrapePage() {
       <Card>
         <CardContent>
           <Stack
-            direction="row"
-            alignItems="center"
+            direction={isNarrow ? "column" : "row"}
+            alignItems={isNarrow ? "flex-start" : "center"}
             justifyContent="space-between"
-            sx={{ mb: 2 }}
-            flexWrap="wrap"
-            gap={2}
+            // 注意: Stack 不支持 flexWrap/gap prop, 必须写进 sx 才生效
+            sx={{ mb: 2, flexWrap: "wrap", rowGap: 2 }}
           >
-            <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexShrink: 0 }}>
               <Typography variant="h4">刮削</Typography>
               <Chip
                 size="small"
@@ -241,7 +243,7 @@ function ScrapePage() {
                 variant={running ? "filled" : "outlined"}
               />
             </Stack>
-            <Stack direction="row" spacing={1.5}>
+            <Stack direction="row" spacing={1.5} sx={{ flexShrink: 0, flexWrap: "wrap", rowGap: 1 }}>
               <Button variant="contained" startIcon={<PlayArrow />} disabled={running || busy} onClick={handleStart}>
                 开始刮削
               </Button>
@@ -259,7 +261,7 @@ function ScrapePage() {
 
           <LinearProgress variant="determinate" value={progress} sx={{ mb: 2 }} />
 
-          <Stack direction="row" spacing={4} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={4} useFlexGap sx={{ flexWrap: "wrap", rowGap: 2 }}>
             <Stat label="进度" value={`${progress}%`} />
             <Stat label="总数" value={total} />
             <Stat label="已开始" value={started} />
@@ -303,8 +305,17 @@ function ScrapePage() {
 
       <Card>
         <CardContent>
-          <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ flexGrow: 1 }}>
+          <Stack
+            direction={isNarrow ? "column" : "row"}
+            alignItems={isNarrow ? "stretch" : "center"}
+            useFlexGap
+            sx={{ mb: 1, flexWrap: "wrap", gap: 1 }}
+          >
+            <Tabs
+              value={tab}
+              onChange={(_, v) => setTab(v)}
+              sx={{ flexGrow: 1, minWidth: 200, width: isNarrow ? "100%" : undefined }}
+            >
               <Tab label={`成功 (${successItems.length})`} />
               <Tab label={`失败 (${failedItems.length})`} />
             </Tabs>

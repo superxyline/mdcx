@@ -277,7 +277,7 @@ export function PosterCutter({ open, onClose, initialPath }: PosterCutterProps) 
             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
               叠加水印
             </Typography>
-            <Stack direction="row" flexWrap="wrap">
+            <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1 }}>
               {MARK_OPTIONS.map((mark) => (
                 <FormControlLabel
                   key={mark}

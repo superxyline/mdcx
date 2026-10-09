@@ -30,7 +30,9 @@ import {
   styled,
   Toolbar,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
+import { useTheme as useMuiTheme } from "@mui/material/styles";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { getScrapeStatus } from "@/client/sdk.gen";
@@ -48,6 +50,8 @@ const Main = styled("main", { shouldForwardProp: (prop) => prop !== "open" })(({
     duration: theme.transitions.duration.leavingScreen,
   }),
   marginLeft: 0,
+  // flex 子项默认 min-width:auto 会被内部最宽内容(如不换行的 code/按钮)撑破手机视口
+  minWidth: 0,
 }));
 
 interface AppBarProps extends MuiAppBarProps {
@@ -93,6 +97,10 @@ const createMenuItems = <
 export default function Layout({ children }: { children: ReactNode }) {
   const { mode, setMode } = useTheme();
   const [open, setOpen] = useState(true);
+  // 手机/窄屏: 侧栏改为汉堡弹出式浮层, 不再常驻挤压内容区
+  const theme = useMuiTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [mobileOpen, setMobileOpen] = useState(false);
   // 接口认证未开启时提示用户去设置 MDCX_API_KEY (auth_enabled 来自刮削状态接口)
   const [authDisabled, setAuthDisabled] = useState(false);
 
@@ -133,19 +141,19 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <Box sx={{ display: "flex" }}>
       <CssBaseline />
-      <AppBar position="fixed">
+      <AppBar position="fixed" open={!isMobile && open}>
         <Toolbar>
           <IconButton
             color="inherit"
             aria-label="open drawer"
-            onClick={() => setOpen(!open)}
+            onClick={() => (isMobile ? setMobileOpen(!mobileOpen) : setOpen(!open))}
             edge="start"
             sx={{ mr: 2 }}
           >
             <Menu />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            MDCx 影片元数据刮削
+            {isMobile ? "MDCx 刮削" : "MDCx 影片元数据刮削"}
           </Typography>
           <IconButton color="inherit" onClick={handleThemeChange}>
             {mode === "light" ? <Brightness7 /> : mode === "dark" ? <Brightness4 /> : <BrightnessAuto />}
@@ -154,34 +162,42 @@ export default function Layout({ children }: { children: ReactNode }) {
       </AppBar>
       <Drawer
         sx={{
-          width: open ? drawerWidth : collapsedDrawerWidth,
+          width: isMobile ? drawerWidth : open ? drawerWidth : collapsedDrawerWidth,
           flexShrink: 0,
           "& .MuiDrawer-paper": {
-            width: open ? drawerWidth : collapsedDrawerWidth,
+            width: isMobile ? drawerWidth : open ? drawerWidth : collapsedDrawerWidth,
             boxSizing: "border-box",
             transition: "width 0.2s",
           },
         }}
-        variant="persistent"
+        variant={isMobile ? "temporary" : "persistent"}
         anchor="left"
-        open={true}
+        open={isMobile ? mobileOpen : true}
+        onClose={() => setMobileOpen(false)}
       >
         <DrawerHeader>
-          <IconButton onClick={() => setOpen(!open)}>{open ? <ChevronLeft /> : <ChevronRight />}</IconButton>
+          <IconButton onClick={() => (isMobile ? setMobileOpen(false) : setOpen(!open))}>
+            {open || isMobile ? <ChevronLeft /> : <ChevronRight />}
+          </IconButton>
         </DrawerHeader>
         <Divider />
         <List>
           {menuItems.map((item) => (
             <ListItem key={item.to} disablePadding>
-              <ListItemButton component={Link} to={item.to} activeProps={{ style: { fontWeight: "bold" } }}>
+              <ListItemButton
+                component={Link}
+                to={item.to}
+                activeProps={{ style: { fontWeight: "bold" } }}
+                onClick={() => isMobile && setMobileOpen(false)}
+              >
                 <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.text} sx={{ opacity: open ? 1 : 0 }} />
+                <ListItemText primary={item.text} sx={{ opacity: open || isMobile ? 1 : 0 }} />
               </ListItemButton>
             </ListItem>
           ))}
         </List>
       </Drawer>
-      <Main>
+      <Main sx={{ p: isMobile ? 2 : 3 }}>
         <DrawerHeader />
         {authDisabled ? (
           <Alert
@@ -194,11 +210,11 @@ export default function Layout({ children }: { children: ReactNode }) {
               </IconButton>
             }
           >
-            接口认证未开启：局域网内任意设备都可读写本机文件。请在 docker-compose 中设置{" "}
+            接口认证未开启：局域网内任何设备都能访问本机接口。如需保护，请在数据目录的{" "}
             <Typography component="span" variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600 }}>
-              MDCX_API_KEY
+              env
             </Typography>{" "}
-            后重启容器；设置说明见 设置 → 代理与网络。
+            文件里设置 <code>MDCX_API_KEY</code> 并重启应用；说明见 设置 → 代理与网络。
           </Alert>
         ) : null}
         {children}

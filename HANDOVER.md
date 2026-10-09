@@ -278,6 +278,28 @@ files API 真实路径列真实目录名、/etc 403 边界。飞牛已授权 `<�
 
 ---
 
+## 五g、2026-10-08 会话（免首访 Key + 手机端全套适配）
+
+1. **去掉首访 API Key 输入**：NAS 认证 Key 在 `/vol3/@appdata/mdcx/env` 的 `MDCX_API_KEY=`
+   （第 5 行，注意 `cat | tail` 会截断看漏）；已改 `MDCX_API_KEY=` 留空 = 不校验，
+   **应用重启后生效**；`/auth` 页保留作以后重开认证的兜底。首页黄条文案改通用
+   （不再写 docker-compose）。
+2. **手机端适配（375px 全页无横向溢出）**：
+   - Layout：`useMediaQuery(down md)` 手机 Drawer 变 temporary 汉堡浮层（点菜单自动收）,
+     标题缩短"MDCx 刮削", **styled Main 必须 `minWidth: 0`**（flex 子项默认 auto 会被
+     内容撑破视口——横向滚动条根因）。
+   - ⚠️ **MUI Stack 不支持 `flexWrap`/`gap` prop（静默丢弃, computed 仍是 nowrap）**，
+     必须写 `sx={{ flexWrap: "wrap", gap: n }}`；全库 6 处已修。
+   - wrap 触发不可靠时改 `useMediaQuery("(max-width:600px)")` 直接换 direction=column：
+     首页标题按钮行/页签行、Stat 加 minWidth 触发换行；settings 顶部按钮行加 flexShrink:0。
+   - settings 窄屏分区导航 = Tabs scrollable 顶部选项条（其内部元素超出视口是**预期**横滑,
+     扫溢出时排除 `.MuiTabs-scroller`）。
+   - 验证法：DOM 探针查 `documentElement.scrollWidth === clientWidth` + 逐元素
+     `getBoundingClientRect().right > clientW`（IAB 截图偶发黑屏/滞后, 数据优先）。
+3. 门禁全绿(ci/build/pytest 78)；待办：提交推送 → 同步 dist → NAS 重启(认证空值生效)。
+
+---
+
 ## 六、遗留事项（按优先级）
 
 1. **媒体库浏览页**：按演员/系列/日期浏览已刮影片的墙页（数据在 NFO 里），点开复用结果详情弹窗。
