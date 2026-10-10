@@ -1139,7 +1139,7 @@ function DuplicatesCard() {
           影视库去重
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          按番号对比「设置 → 常规设置 → 影视库目录」里配置的所有库(可多个), 找出同一部影片的重复副本。 番号取自 NFO
+          按番号对比「设置 → 影视库去重 → 影视库目录」里配置的所有库(可多个), 找出同一部影片的重复副本。 番号取自 NFO
           或文件名解析, 文件名不同的重复也能对上。扫描范围只含影视库, 与刮削源互不影响。
         </Typography>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 1 }}>

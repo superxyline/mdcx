@@ -669,7 +669,7 @@ async def scan_duplicates() -> DuplicatesResponse:
     if not roots:
         raise HTTPException(
             status_code=400,
-            detail="尚未配置影视库目录, 请先到 设置 → 常规设置 → 影视库目录 添加(可多个).",
+            detail="尚未配置影视库目录, 请先到 设置 → 影视库去重 → 影视库目录 添加(可多个).",
         )
     video_exts = {e.lower() if e.startswith(".") else f".{e.lower()}" for e in manager.config.media_type}
     return await asyncio.to_thread(_scan_duplicates, roots, video_exts)

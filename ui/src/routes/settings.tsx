@@ -80,6 +80,13 @@ const SECTIONS: SectionDef[] = [
     ],
   },
   {
+    key: "library",
+    label: "影视库去重",
+    group: "常用设置",
+    desc: "工具箱「影视库去重」扫描的成品库目录, 可添加多个; 与刮削源(媒体路径)互不影响",
+    fields: ["media_libraries"],
+  },
+  {
     key: "server",
     label: "媒体服务器",
     group: "常用设置",
