@@ -77,10 +77,24 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=["*"],  # Allows all origins
         allow_credentials=True,
-        allow_methods=["*"],  # Allows all methods
-        allow_headers=["*"],  # Allows all headers
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     app.add_middleware(WebSocketProtocolBearerMiddleware)
+
+    @app.middleware("http")
+    async def no_cache_html(request, call_next):
+        """HTML 入口禁止启发式缓存.
+
+        前端 js/css 文件名带内容 hash 可永久缓存, 但 index.html 一旦被浏览器
+        启发式缓存, 发新版本后用户会一直加载旧 js(界面还是老版本, 必须强刷).
+        no-cache 允许缓存但每次必须回源验证, 配合 StaticFiles 的 ETag 实现
+        "没变化 304, 有变化立即拿到新入口".
+        """
+        response = await call_next(request)
+        if response.headers.get("content-type", "").startswith("text/html"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     app.include_router(api)
     app.mount("/", SPAStaticFiles(directory="ui/dist", html=True), name="ui")
