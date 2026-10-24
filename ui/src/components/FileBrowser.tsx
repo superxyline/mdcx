@@ -118,8 +118,9 @@ export function FileBrowser({
   const handleClearAll = () => setSelectedPaths(new Set());
 
   const handleConfirm = () => {
-    if (!allowMultiple && selectionType === "directory") {
-      onSelect([path]);
+    if (selectionType === "directory") {
+      // 目录类型: 未勾选任何项时确认 = 添加当前所在目录(多选模式下浏览到哪就加哪), 有勾选则用勾选结果
+      onSelect(selectedPaths.size > 0 ? Array.from(selectedPaths) : [path]);
     } else {
       onSelect(Array.from(selectedPaths));
     }
@@ -293,7 +294,7 @@ export function FileBrowser({
           <Button
             variant="contained"
             onClick={handleConfirm}
-            disabled={selectedPaths.size === 0 && (allowMultiple || selectionType !== "directory")}
+            disabled={selectedPaths.size === 0 && selectionType !== "directory"}
           >
             {`Confirm${selectedPaths.size > 1 ? ` (${selectedPaths.size})` : ""}`}
           </Button>
