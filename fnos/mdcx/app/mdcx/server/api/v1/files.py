@@ -31,6 +31,22 @@ class FileListResponse(BaseModel):
     total: int = Field(..., description="路径下的文件和目录总数. 若大于 len(data) 说明 data 因文件过多被截断.")
 
 
+class FileRootsResponse(BaseModel):
+    """The response structure for the browsable roots endpoint."""
+
+    roots: list[str] = Field(..., description="可浏览的根目录列表, 即服务器白名单 SAFE_DIRS.")
+
+
+@router.get("/roots", operation_id="listFileRoots", summary="列出可浏览的根目录")
+async def list_file_roots() -> FileRootsResponse:
+    """
+    返回文件选择器可浏览的全部根目录, 即白名单 `SAFE_DIRS`
+    (环境变量 `MDCX_SAFE_DIRS`; 原生 FPK 部署时启动脚本已把飞牛「授权目录」合并进来).
+    前端据此展示「位置」按钮, 否则用户只能从首个根目录开始翻, 无法发现其他已授权目录.
+    """
+    return FileRootsResponse(roots=[p.as_posix() for p in SAFE_DIRS])
+
+
 @router.get("/list", operation_id="listFiles", summary="列出文件和目录")
 async def list_files(
     path: Annotated[str, Query(description="服务器路径. 相对路径将基于 SAFE_DIRS 中的首个路径解析.")],

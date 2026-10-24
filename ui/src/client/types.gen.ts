@@ -1647,6 +1647,18 @@ export type FileItem = {
 };
 
 /**
+ * FileRootsResponse
+ * The response structure for the browsable roots endpoint.
+ */
+export type FileRootsResponse = {
+    /**
+     * Roots
+     * 可浏览的根目录列表, 即服务器白名单 SAFE_DIRS.
+     */
+    roots: Array<string>;
+};
+
+/**
  * HDPicSource
  */
 export type HdPicSource = 'poster' | 'thumb' | 'amazon' | 'official' | 'google' | 'goo_only';
@@ -2395,6 +2407,22 @@ export type GetWebSocketConnectionsResponses = {
      */
     200: unknown;
 };
+
+export type ListFileRootsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/files/roots';
+};
+
+export type ListFileRootsResponses = {
+    /**
+     * Successful Response
+     */
+    200: FileRootsResponse;
+};
+
+export type ListFileRootsResponse = ListFileRootsResponses[keyof ListFileRootsResponses];
 
 export type ListFilesData = {
     body?: never;

@@ -5,6 +5,7 @@ import {
   Breadcrumbs,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
   Link,
   List,
@@ -14,13 +15,14 @@ import {
   ListItemText,
   Paper,
   TextField,
+  Typography,
 } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import type React from "react";
 import { useEffect, useState } from "react";
 import type { FileItem } from "@/client";
-import { listFilesOptions } from "@/client/@tanstack/react-query.gen";
+import { listFileRootsOptions, listFilesOptions } from "@/client/@tanstack/react-query.gen";
 
 interface FileBrowserProps {
   /**
@@ -65,6 +67,10 @@ export function FileBrowser({
   const { data, error, isLoading, refetch } = useQuery({ ...listFilesOptions({ query: { path } }), retry: false });
   const items = data?.items || [];
   const total = data?.total;
+
+  // 服务器白名单里的全部根目录(含飞牛「授权目录」合并结果), 否则从初始路径以外无法发现其他已授权目录
+  const rootsQ = useQuery({ ...listFileRootsOptions(), retry: false });
+  const roots = rootsQ.data?.roots ?? [];
 
   const isItemSelectable = (item: FileItem) => {
     if (selectionType === "mixed") return true;
@@ -157,6 +163,23 @@ export function FileBrowser({
           <Button type="submit" variant="contained" size="small">
             Go
           </Button>
+        </Box>
+      )}
+      {roots.length > 0 && (
+        <Box sx={{ mb: 1, display: "flex", gap: 0.5, flexWrap: "wrap", alignItems: "center" }}>
+          <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+            位置:
+          </Typography>
+          {roots.map((root) => (
+            <Chip
+              key={root}
+              label={root}
+              size="small"
+              onClick={() => setPath(root)}
+              color={path === root ? "primary" : "default"}
+              variant={path === root ? "filled" : "outlined"}
+            />
+          ))}
         </Box>
       )}
       <Box sx={{ mb: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>

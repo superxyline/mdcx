@@ -212,7 +212,7 @@ export const Config_InputSchema = {
             default: '/media',
             uiSchema: {
                 customProps: {
-                    initialPath: 'E:/codex/mdcx/media',
+                    initialPath: 'E:/codex/mdcx',
                     multiple: false,
                     type: 'directory'
                 },
@@ -243,7 +243,7 @@ export const Config_InputSchema = {
             default: [],
             uiSchema: {
                 customProps: {
-                    initialPath: 'E:/codex/mdcx/media',
+                    initialPath: 'E:/codex/mdcx',
                     multiple: true,
                     type: 'directory'
                 },
@@ -1127,7 +1127,7 @@ export const Config_OutputSchema = {
             default: '/media',
             uiSchema: {
                 customProps: {
-                    initialPath: 'E:/codex/mdcx/media',
+                    initialPath: 'E:/codex/mdcx',
                     multiple: false,
                     type: 'directory'
                 },
@@ -1158,7 +1158,7 @@ export const Config_OutputSchema = {
             default: [],
             uiSchema: {
                 customProps: {
-                    initialPath: 'E:/codex/mdcx/media',
+                    initialPath: 'E:/codex/mdcx',
                     multiple: true,
                     type: 'directory'
                 },
@@ -2415,6 +2415,23 @@ export const FileItemSchema = {
     required: ['name', 'path', 'type'],
     title: 'FileItem',
     description: 'Represents a file or directory item.'
+} as const;
+
+export const FileRootsResponseSchema = {
+    properties: {
+        roots: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Roots',
+            description: '可浏览的根目录列表, 即服务器白名单 SAFE_DIRS.'
+        }
+    },
+    type: 'object',
+    required: ['roots'],
+    title: 'FileRootsResponse',
+    description: 'The response structure for the browsable roots endpoint.'
 } as const;
 
 export const HDPicSourceSchema = {
